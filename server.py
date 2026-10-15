@@ -124,6 +124,25 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
                 }
             )
 
+        if self.path.startswith("/api/pairing"):
+            # Only serve token to localhost requests for secure QR code generation on the user's Mac
+            client_ip = self.client_address[0]
+            token = ""
+            if client_ip in ("127.0.0.1", "::1"):
+                try:
+                    proc = subprocess.run([GH_BIN, "auth", "token"], capture_output=True, text=True, timeout=4)
+                    if proc.returncode == 0:
+                        token = proc.stdout.strip()
+                except Exception:
+                    pass
+            return self._send_json(
+                {
+                    "ok": True,
+                    "endpoint": f"https://api.github.com/gists/{DEFAULT_GIST_ID}",
+                    "token": token,
+                }
+            )
+
         if self.path.startswith("/api/state"):
             ensure_dirs()
             # Pull remote Gist if available so changes made on iPhone over 4G/5G sync to Mac!

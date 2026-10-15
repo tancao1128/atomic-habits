@@ -611,8 +611,14 @@
               Pull Now
             </button>
             <button onclick="copyIphoneMagicLink()" class="tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 ml-auto">
-              📱 Copy iPhone Pairing Link
+              📱 Copy / Show iPhone QR
             </button>
+          </div>
+          <div id="iphone-qr-box" class="hidden pt-3 border-t border-slate-200/60 dark:border-white/10 flex flex-col items-center text-center gap-2">
+            <p class="text-[11px] font-semibold text-indigo-500 dark:text-indigo-300">
+              Scan with iPhone Camera to open `https://tancao.org/atomic-habits/` & pair Cloud Sync automatically:
+            </p>
+            <img id="iphone-qr-img" alt="iPhone Pairing QR Code" class="w-40 h-40 rounded-xl bg-white p-2 shadow-md" />
           </div>
         </div>
       </div>
@@ -1536,17 +1542,24 @@
     }
 
     // Cloud Sync Hook (GitHub Secret Gist / Firebase Realtime DB / Supabase REST)
+    const DEFAULT_GIST_ENDPOINT = 'https://api.github.com/gists/938d0babf550630ef80c5f709ba21c33';
+
     function getStoredCloudConfig() {
       try {
         const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
-        return raw ? JSON.parse(raw) : { endpoint: '', apiKey: '' };
-      } catch (e) {
-        return { endpoint: '', apiKey: '' };
-      }
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            endpoint: parsed.endpoint || DEFAULT_GIST_ENDPOINT,
+            apiKey: parsed.apiKey || ''
+          };
+        }
+      } catch (e) {}
+      return { endpoint: DEFAULT_GIST_ENDPOINT, apiKey: '' };
     }
 
     function saveCloudConfig() {
-      const endpoint = document.getElementById('cloud-endpoint-input').value.trim();
+      const endpoint = document.getElementById('cloud-endpoint-input').value.trim() || DEFAULT_GIST_ENDPOINT;
       const apiKey = document.getElementById('cloud-apikey-input').value.trim();
       localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
       document.getElementById('sync-status-badge').textContent = endpoint ? 'Auto-Sync Ready ✓' : 'Not Configured';
@@ -1565,9 +1578,14 @@
 
       try {
         const isGist = endpoint.includes('api.github.com/gists/');
+        if (isGist && !apiKey) {
+          // Read-only without token on public web; local Mac server handles authenticated Gist writes automatically
+          if (!silent) showToast('Enter GitHub token to push directly from browser, or use Mac App', 'ℹ️');
+          return;
+        }
         const headers = { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' };
         if (apiKey) {
-          headers['Authorization'] = isGist ? `Bearer ${apiKey}` : `Bearer ${apiKey}`;
+          headers['Authorization'] = `Bearer ${apiKey}`;
           if (!isGist) headers['apikey'] = apiKey;
         }
 
@@ -1637,19 +1655,35 @@
       }
     }
 
-    function copyIphoneMagicLink() {
+    async function copyIphoneMagicLink() {
       const cfg = getStoredCloudConfig();
-      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint;
-      const apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
-      const baseUrl = location.origin + location.pathname;
-      const magicUrl = endpoint
-        ? `${baseUrl}#sync_endpoint=${encodeURIComponent(endpoint)}&sync_key=${encodeURIComponent(apiKey)}`
-        : baseUrl;
+      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint || DEFAULT_GIST_ENDPOINT;
+      let apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
+
+      // If running on Mac localhost and apiKey is empty, ask local server if it can supply pairing link
+      if (!apiKey && (location.hostname === '127.0.0.1' || location.hostname === 'localhost')) {
+        try {
+          const r = await fetch('/api/pairing');
+          if (r.ok) {
+            const d = await r.json();
+            if (d.token) apiKey = d.token;
+          }
+        } catch (e) {}
+      }
+
+      const publicBaseUrl = 'https://tancao.org/atomic-habits/';
+      const magicUrl = `${publicBaseUrl}#sync_endpoint=${encodeURIComponent(endpoint)}${apiKey ? `&sync_key=${encodeURIComponent(apiKey)}` : ''}`;
+
+      const qrBox = document.getElementById('iphone-qr-box');
+      const qrImg = document.getElementById('iphone-qr-img');
+      if (qrBox && qrImg) {
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(magicUrl)}`;
+        qrBox.classList.remove('hidden');
+      }
+
       navigator.clipboard.writeText(magicUrl).then(() => {
-        showToast('Copied iPhone Magic Link!', '📱');
-      }).catch(() => {
-        prompt('Copy this iPhone Magic Link:', magicUrl);
-      });
+        showToast('Copied iPhone Magic Link & Displayed QR!', '📱');
+      }).catch(() => {});
     }
 
     function checkMagicLinkPairing() {
