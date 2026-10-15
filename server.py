@@ -68,7 +68,7 @@ def push_gist_background(state_obj: dict):
     threading.Thread(target=_worker, daemon=True).start()
 
 
-def pull_gist_state() -> dict | None:
+def pull_gist_state():
     """Pull latest state from GitHub Secret Gist via gh CLI."""
     try:
         proc = subprocess.run(
