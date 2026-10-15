@@ -1,0 +1,18 @@
+{
+  "name": "Atomic Habit & Streak Tracker — Identity OS",
+  "short_name": "Atomic Habits",
+  "description": "Identity-based habit and streak tracker with Never Miss Twice recovery, 7-day interactive matrix, and cross-platform PWA support.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

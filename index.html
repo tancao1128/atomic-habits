@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Atomic Habit & Streak Tracker — Identity OS</title>
+
+  <!-- iOS / macOS PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Atomic Habits" />
+  <meta name="theme-color" content="#0b0f19" id="theme-color-meta" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS via CDN with custom configuration -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              900: '#1e1b4b',
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    :root {
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      overflow-x: hidden;
+    }
+
+    /* Sleek Glassmorphism */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(226, 232, 240, 0.85);
+    }
+
+    .dark .glass-card {
+      background: rgba(17, 24, 39, 0.72);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .glass-header {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .dark .glass-header {
+      background: rgba(11, 15, 25, 0.82);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    /* Micro-interactions */
+    .tap-scale {
+      transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .tap-scale:active {
+      transform: scale(0.96);
+    }
+
+    @keyframes pulse-amber {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
+      50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+    }
+    .never-miss-pulse {
+      animation: pulse-amber 2.2s infinite;
+    }
+
+    @keyframes check-pop {
+      0% { transform: scale(0.8); }
+      50% { transform: scale(1.14); }
+      100% { transform: scale(1); }
+    }
+    .animate-check {
+      animation: check-pop 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.25);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.45);
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 dark:bg-[#0b0f19] dark:text-slate-100 min-h-screen pb-24 lg:pb-12 selection:bg-indigo-500 selection:text-white transition-colors duration-200">
+
+  <!-- Ambient Background Glow -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+    <div class="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-indigo-500/10 dark:bg-indigo-500/15 blur-3xl"></div>
+    <div class="absolute top-1/4 -right-32 w-96 h-96 rounded-full bg-emerald-500/10 dark:bg-emerald-500/10 blur-3xl"></div>
+    <div class="absolute bottom-0 left-1/3 w-80 h-80 rounded-full bg-amber-500/5 dark:bg-amber-500/10 blur-3xl"></div>
+  </div>
+
+  <!-- Top Sticky Header -->
+  <header class="sticky top-0 z-30 glass-header border-b border-slate-200/80 dark:border-white/10" style="padding-top: var(--safe-top);">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Brand & Identity Motto -->
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-700 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25 shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div class="truncate">
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold tracking-tight truncate">Atomic Habit OS</h1>
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border border-indigo-500/20">
+              1% Better Every Day
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 truncate" id="header-date-subtitle">
+            Every action is a vote for the person you wish to become.
+          </p>
+        </div>
+      </div>
+
+      <!-- Header Quick Actions -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="jumpToToday()" id="btn-jump-today" class="tap-scale px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-200/70 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span>Today</span>
+        </button>
+
+        <button onclick="openHabitModal()" class="tap-scale px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm shadow-indigo-500/25 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+          <span class="hidden sm:inline">New Habit</span>
+          <span class="sm:hidden">Add</span>
+        </button>
+
+        <button onclick="openDataModal()" title="Backup, Export/Import & Cloud Sync" class="tap-scale p-2 rounded-lg bg-slate-200/70 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-300">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+        </button>
+
+        <button onclick="toggleTheme()" id="theme-toggle-btn" title="Toggle Dark/Light Mode" class="tap-scale p-2 rounded-lg bg-slate-200/70 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-300">
+          <!-- Sun Icon -->
+          <svg id="icon-sun" class="w-4 h-4 hidden dark:block text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <!-- Moon Icon -->
+          <svg id="icon-moon" class="w-4 h-4 block dark:hidden text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5">
+
+    <!-- Top KPI Strip (4 Metric Cards) -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <!-- KPI 1: Selected Day Progress -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400" id="kpi-day-label">Today's Completion</span>
+          <span class="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400" id="kpi-daily-count">0/0</span>
+        </div>
+        <div class="flex items-baseline justify-between mb-2">
+          <div class="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight" id="kpi-daily-pct">0%</div>
+          <span class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400" id="kpi-daily-status">Ready</span>
+        </div>
+        <div class="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+          <div id="kpi-daily-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- KPI 2: Weekly Consistency -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">7-Day Consistency</span>
+          <span class="p-1 rounded-md bg-emerald-500/10 text-emerald-500">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <div class="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight" id="kpi-weekly-pct">0%</div>
+          <span class="text-xs text-slate-500 dark:text-slate-400 font-mono" id="kpi-weekly-fraction">0/0 votes</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 truncate" id="kpi-weekly-caption">Active week performance</p>
+      </div>
+
+      <!-- KPI 3: Best Active Streak -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Best Active Streak</span>
+          <span class="text-sm">🔥</span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <div class="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-amber-500" id="kpi-best-streak">0</div>
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">days</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 truncate" id="kpi-best-streak-habit">Start your chain today</p>
+      </div>
+
+      <!-- KPI 4: Never Miss Twice Alert -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm" id="kpi-recovery-card">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Never Miss Twice</span>
+          <span class="text-sm">⚡</span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <div class="text-2xl sm:text-3xl font-extrabold font-mono tracking-tight" id="kpi-recovery-count">0</div>
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400" id="kpi-recovery-unit">at risk</span>
+        </div>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2 truncate" id="kpi-recovery-desc">All streaks intact</p>
+      </div>
+    </section>
+
+    <!-- 2-Column Split-View Dashboard on Desktop (macOS), Tabbed on Mobile (iPhone) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT COLUMN: Daily Logging & 7-Day Week Strip (7 cols on Desktop) -->
+      <section id="panel-daily" class="lg:col-span-7 space-y-5">
+
+        <!-- Real-Time Calendar & 7-Day Interactive Week Strip -->
+        <div class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-sm sm:text-base font-bold tracking-tight" id="week-range-title">Oct 12 – Oct 18, 2026</h2>
+                <span id="selected-day-pill" class="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">
+                  Today
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5" id="selected-date-full">Friday, October 16, 2026</p>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button onclick="shiftWeek(-1)" title="Previous 7 Days" class="tap-scale p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button onclick="jumpToToday()" class="tap-scale px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300">
+                Today
+              </button>
+              <button onclick="shiftWeek(1)" title="Next 7 Days" class="tap-scale p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 7-Day Strip Container -->
+          <div class="grid grid-cols-7 gap-1.5 sm:gap-2" id="week-strip-grid">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- Category Filter & Recovery Priority Filter -->
+        <div class="flex items-center justify-between gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <div class="flex items-center gap-1.5" id="category-filter-bar">
+            <button onclick="setCategoryFilter('ALL')" data-cat="ALL" class="cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold transition">
+              All Habits
+            </button>
+            <button onclick="setCategoryFilter('Research')" data-cat="Research" class="cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-500"></span>Research
+            </button>
+            <button onclick="setCategoryFilter('Language')" data-cat="Language" class="cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-amber-500"></span>Language
+            </button>
+            <button onclick="setCategoryFilter('Vitality')" data-cat="Vitality" class="cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>Vitality
+            </button>
+            <button onclick="setCategoryFilter('Synthesis')" data-cat="Synthesis" class="cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-rose-500"></span>Synthesis
+            </button>
+          </div>
+
+          <button onclick="markAllSelectedDay()" class="tap-scale shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            Check All
+          </button>
+        </div>
+
+        <!-- Never Miss Twice Recovery Banner (Shown dynamically when >=1 habit was missed yesterday) -->
+        <div id="recovery-alert-banner" class="hidden rounded-2xl p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200">
+          <div class="flex items-start gap-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-lg shrink-0">
+              ⚡
+            </div>
+            <div class="flex-1 text-xs leading-relaxed">
+              <div class="font-bold text-amber-800 dark:text-amber-300 text-sm flex items-center gap-2">
+                <span>Rule #1 of Streak Recovery: Never Miss Twice</span>
+              </div>
+              <p class="mt-0.5 text-amber-700/90 dark:text-amber-200/80" id="recovery-banner-text">
+                Missing once is an accident. Missing twice is the start of a new habit. Prioritize the highlighted habits below today to immediately reclaim your identity chain.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Daily Habit Cards List -->
+        <div id="habit-cards-list" class="space-y-3">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+      </section>
+
+      <!-- RIGHT COLUMN: Weekly Streak Analytics & 7-Day Interactive Matrix (5 cols on Desktop) -->
+      <section id="panel-analytics" class="lg:col-span-5 space-y-5 hidden lg:block">
+
+        <!-- Weekly Completion Bar Chart (7 Days) -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold tracking-tight">Weekly Completion Bar Chart</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Daily habit execution across the active 7-day window</p>
+            </div>
+            <span class="text-xs font-mono font-semibold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300" id="chart-avg-badge">
+              Avg: 0%
+            </span>
+          </div>
+
+          <!-- Bar Chart Canvas -->
+          <div class="h-44 flex items-end justify-between gap-2 sm:gap-3 pt-6 px-2 border-b border-slate-200/70 dark:border-white/10 pb-3" id="weekly-bar-chart">
+            <!-- Populated via JS -->
+          </div>
+          <div class="grid grid-cols-7 gap-2 pt-2 text-center" id="weekly-bar-labels">
+            <!-- Labels populated via JS -->
+          </div>
+        </div>
+
+        <!-- 7-Day Interactive Habit Matrix -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold tracking-tight">7-Day Interactive Habit Matrix</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Tap any cell to toggle past or current day completion directly</p>
+            </div>
+            <span class="text-[11px] font-mono text-indigo-500 dark:text-indigo-400 font-semibold">Live Toggle</span>
+          </div>
+
+          <div class="overflow-x-auto -mx-2 px-2">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr id="matrix-header-row" class="border-b border-slate-200/70 dark:border-white/10 text-[11px] font-mono text-slate-400">
+                  <!-- Populated via JS -->
+                </tr>
+              </thead>
+              <tbody id="matrix-body-rows" class="divide-y divide-slate-200/50 dark:divide-white/5 text-xs">
+                <!-- Populated via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Matrix Legend -->
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-4 pt-3 border-t border-slate-200/60 dark:border-white/10 text-[11px] text-slate-500 dark:text-slate-400">
+            <div class="flex items-center gap-3">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded bg-emerald-500 inline-block"></span> Done
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded border border-amber-500 bg-amber-500/20 inline-block"></span> ⚡ Missed Yesterday
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded bg-slate-200 dark:bg-slate-800 inline-block"></span> Unchecked
+              </span>
+            </div>
+            <span class="font-mono" id="matrix-summary-stat">0 total check-ins</span>
+          </div>
+        </div>
+
+        <!-- Identity-Based Breakdown by Category -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm sm:text-base font-bold tracking-tight">Identity Alignment by Domain</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Votes cast this week toward each facet of your identity</p>
+            </div>
+          </div>
+          <div class="space-y-3" id="identity-domain-bars">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+
+      </section>
+    </div>
+  </main>
+
+  <!-- Thumb-Friendly Bottom Navigation Bar (Mobile iPhone Viewport Only) -->
+  <nav class="lg:hidden fixed bottom-0 inset-x-0 z-40 glass-header border-t border-slate-200/80 dark:border-white/10" style="padding-bottom: var(--safe-bottom);">
+    <div class="grid grid-cols-4 h-16 max-w-md mx-auto px-2">
+      <button onclick="switchMobileTab('daily')" id="mob-tab-daily" class="tap-scale flex flex-col items-center justify-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="text-[11px]">Today Log</span>
+      </button>
+
+      <button onclick="switchMobileTab('analytics')" id="mob-tab-analytics" class="tap-scale flex flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        <span class="text-[11px]">7d Matrix</span>
+      </button>
+
+      <button onclick="openHabitModal()" class="tap-scale flex flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+        <span class="text-[11px]">New Habit</span>
+      </button>
+
+      <button onclick="openDataModal()" class="tap-scale flex flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400 font-medium">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        </svg>
+        <span class="text-[11px]">Sync / JSON</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MODAL 1: Create / Edit Identity-Based Habit -->
+  <div id="habit-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+    <div class="glass-card w-full max-w-md rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-white/15 animate-check">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-base font-bold" id="habit-modal-title">Create Identity-Based Habit</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Focus on who you wish to become, not just what you want to achieve.</p>
+        </div>
+        <button onclick="closeHabitModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="habit-form" onsubmit="saveHabitForm(event)" class="space-y-4">
+        <input type="hidden" id="habit-id-input" />
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            Habit Name (Actionable Behavior)
+          </label>
+          <input type="text" id="habit-name-input" required placeholder="e.g., Deep Mathematical Proof & Research Block"
+            class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            Identity Goal ("Who I am becoming")
+          </label>
+          <input type="text" id="habit-identity-input" required placeholder="e.g., I am a rigorous mathematician who advances frontier research daily"
+            class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+              Category
+            </label>
+            <select id="habit-category-input"
+              class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="Research">Research</option>
+              <option value="Language">Language</option>
+              <option value="Vitality">Vitality</option>
+              <option value="Synthesis">Synthesis</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+              Daily Target
+            </label>
+            <input type="text" id="habit-target-input" required placeholder="e.g., 90 mins / 1 theorem"
+              class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-200/70 dark:border-white/10">
+          <button type="button" id="btn-delete-habit" onclick="deleteCurrentHabit()" class="hidden px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-500/10">
+            Delete Habit
+          </button>
+          <div class="flex items-center gap-2 ml-auto">
+            <button type="button" onclick="closeHabitModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-200/70 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+              Cancel
+            </button>
+            <button type="submit" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/20">
+              Save Habit
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: Data Persistence, JSON Backup & Cloud Sync Hook -->
+  <div id="data-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-slate-200 dark:border-white/15 animate-check max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="text-base font-bold">Data Portability & Cloud Sync</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Local-first storage with instant JSON backup and optional cloud webhook sync</p>
+        </div>
+        <button onclick="closeDataModal()" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="space-y-5">
+        <!-- JSON Export / Import -->
+        <div class="p-4 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/70 dark:border-white/10 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">JSON Backup System</span>
+            <span class="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">localStorage Active</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Export your complete habit definitions and historical completion logs as a portable JSON file, or restore from an existing backup.
+          </p>
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <button onclick="exportDataJSON()" class="tap-scale px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export JSON Backup
+            </button>
+
+            <label class="tap-scale cursor-pointer px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/15 text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Import JSON File
+              <input type="file" accept=".json,application/json" onchange="importDataJSON(event)" class="hidden" />
+            </label>
+
+            <button onclick="resetToAcademicDemo()" class="tap-scale px-3 py-2 rounded-xl text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 ml-auto">
+              Reset Demo Seed
+            </button>
+          </div>
+        </div>
+
+        <!-- Optional Cloud Sync Hook (GitHub Gist / Supabase / Firebase REST) -->
+        <div class="p-4 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/70 dark:border-white/10 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">24/7 Cloud Sync (iPhone ⇄ MacBook)</span>
+            <span id="sync-status-badge" class="text-[11px] font-mono text-slate-400">Not Configured</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Supports <strong>GitHub Secret Gist API</strong> (`https://api.github.com/gists/GIST_ID`), <strong>Firebase Realtime DB</strong>, or <strong>Supabase REST</strong>. Automatically syncs whenever you check a habit!
+          </p>
+          <div class="space-y-2">
+            <input type="url" id="cloud-endpoint-input" placeholder="https://api.github.com/gists/YOUR_GIST_ID or Firebase URL"
+              class="w-full px-3 py-2 rounded-xl text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type="password" id="cloud-apikey-input" placeholder="GitHub Token / Bearer / Supabase API Key"
+              class="w-full px-3 py-2 rounded-xl text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <button onclick="saveCloudConfig()" class="tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-200">
+              Save Config
+            </button>
+            <button onclick="pushToCloud()" class="tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white">
+              Push Now
+            </button>
+            <button onclick="pullFromCloud()" class="tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
+              Pull Now
+            </button>
+            <button onclick="copyIphoneMagicLink()" class="tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-500/30 ml-auto">
+              📱 Copy iPhone Pairing Link
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast-container" class="fixed bottom-20 lg:bottom-6 right-4 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-2">
+    <div class="glass-card px-4 py-2.5 rounded-xl shadow-xl border border-indigo-500/30 flex items-center gap-2 text-xs font-semibold">
+      <span id="toast-icon">✨</span>
+      <span id="toast-message">Saved</span>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    const STORAGE_KEY = 'atomic_habit_streak_os_v1';
+    const CLOUD_CONFIG_KEY = 'atomic_habit_cloud_config_v1';
+
+    const CATEGORY_STYLES = {
+      Research: {
+        badge: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30',
+        dot: 'bg-indigo-500',
+        bar: 'bg-indigo-500',
+        accent: '#6366f1'
+      },
+      Language: {
+        badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
+        dot: 'bg-amber-500',
+        bar: 'bg-amber-500',
+        accent: '#f59e0b'
+      },
+      Vitality: {
+        badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
+        dot: 'bg-emerald-500',
+        bar: 'bg-emerald-500',
+        accent: '#10b981'
+      },
+      Synthesis: {
+        badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30',
+        dot: 'bg-rose-500',
+        bar: 'bg-rose-500',
+        accent: '#f43f5e'
+      }
+    };
+
+    // Date Formatting Utilities (Local Timezone Safe YYYY-MM-DD)
+    function toDateKey(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseDateKey(dateKey) {
+      const [y, m, d] = dateKey.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function addDays(dateKey, offset) {
+      const dt = parseDateKey(dateKey);
+      dt.setDate(dt.getDate() + offset);
+      return toDateKey(dt);
+    }
+
+    function getStartOfWeek(dateKey) {
+      // Monday-start 7-day week
+      const dt = parseDateKey(dateKey);
+      const day = dt.getDay(); // 0=Sun, 1=Mon, ...
+      const diff = day === 0 ? -6 : 1 - day;
+      dt.setDate(dt.getDate() + diff);
+      return toDateKey(dt);
+    }
+
+    function getWeekDateKeys(weekStartKey) {
+      return Array.from({ length: 7 }, (_, i) => addDays(weekStartKey, i));
+    }
+
+    // State Management
+    const todayKey = toDateKey(new Date());
+    let selectedDateKey = todayKey;
+    let currentWeekStartKey = getStartOfWeek(todayKey);
+    let activeCategoryFilter = 'ALL';
+    let mobileActiveTab = 'daily';
+
+    let appState = {
+      theme: 'dark',
+      habits: [],
+      logs: {} // { 'YYYY-MM-DD': { [habitId]: true } }
+    };
+
+    function createDefaultSeedData() {
+      const habits = [
+        {
+          id: 'hab_research_proof',
+          name: 'Deep Mathematical Proof & Manuscript Block',
+          identity: 'I am a rigorous applied mathematician who advances frontier research every morning',
+          category: 'Research',
+          target: '90 mins unfocused-free'
+        },
+        {
+          id: 'hab_vitality_mobility',
+          name: 'Morning Mobility, Hydration & Zone-2 Walk',
+          identity: 'I am an energized scholar who protects physical longevity and cognitive stamina',
+          category: 'Vitality',
+          target: '30 mins outdoor / gym'
+        },
+        {
+          id: 'hab_language_practice',
+          name: 'Bilingual Academic & Korean/English Precision Drill',
+          identity: 'I am an eloquent global communicator across scientific and daily contexts',
+          category: 'Language',
+          target: '25 mins active recall'
+        },
+        {
+          id: 'hab_synthesis_notes',
+          name: 'Second-Brain Synthesis & Lecture Reflection Log',
+          identity: 'I am a systematic thinker who compounds knowledge into reusable assets',
+          category: 'Synthesis',
+          target: '1 atomic note + daily log'
+        },
+        {
+          id: 'hab_research_reading',
+          name: 'ArXiv / Variational Analysis Literature Audit',
+          identity: 'I am a sharp referee and scholar with deep command of the modern literature',
+          category: 'Research',
+          target: '1 paper / 2 theorems'
+        }
+      ];
+
+      // Seed realistic past 10 days so streaks, charts, and "Never Miss Twice" badge shine immediately
+      const logs = {};
+      const yesterdayKey = addDays(todayKey, -1);
+
+      for (let offset = -9; offset <= -2; offset++) {
+        const dKey = addDays(todayKey, offset);
+        logs[dKey] = {
+          hab_research_proof: true,
+          hab_vitality_mobility: offset % 3 !== 0,
+          hab_language_practice: true,
+          hab_synthesis_notes: offset % 2 === 0,
+          hab_research_reading: true
+        };
+      }
+
+      // Yesterday: leave 'hab_language_practice' and 'hab_synthesis_notes' unchecked so "⚡ Never Miss Twice" triggers!
+      logs[yesterdayKey] = {
+        hab_research_proof: true,
+        hab_vitality_mobility: true,
+        hab_language_practice: false,
+        hab_synthesis_notes: false,
+        hab_research_reading: true
+      };
+
+      // Today: pre-check 2 habits
+      logs[todayKey] = {
+        hab_research_proof: true,
+        hab_vitality_mobility: true
+      };
+
+      return {
+        theme: 'dark',
+        habits,
+        logs
+      };
+    }
+
+    async function loadState() {
+      // 1. Try local disk server first when running inside macOS App / localhost server
+      if (location.protocol.startsWith('http')) {
+        try {
+          const res = await fetch('/api/state', { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.exists && data.state && Array.isArray(data.state.habits) && data.state.logs) {
+              appState = data.state;
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+              renderAll();
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // 2. Fallback to localStorage
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.habits) && parsed.logs) {
+            appState = parsed;
+            saveState();
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse localStorage, using seed data:', e);
+      }
+      appState = createDefaultSeedData();
+      saveState();
+    }
+
+    let cloudPushTimer = null;
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        console.error('Failed to save state to localStorage:', e);
+      }
+
+      // Mirror to disk automatically if served by local macOS server
+      if (location.protocol.startsWith('http') && (location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname.startsWith('192.168.'))) {
+        fetch('/api/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state: appState })
+        }).catch(() => {});
+      }
+
+      // Auto-push to cloud endpoint (debounced 800ms) if configured
+      const cfg = getStoredCloudConfig();
+      if (cfg && cfg.endpoint) {
+        if (cloudPushTimer) clearTimeout(cloudPushTimer);
+        cloudPushTimer = setTimeout(() => {
+          pushToCloud(true);
+        }, 800);
+      }
+    }
+
+    // Habit & Streak Calculations
+    function isHabitDone(habitId, dateKey) {
+      return Boolean(appState.logs[dateKey] && appState.logs[dateKey][habitId]);
+    }
+
+    function toggleHabitCompletion(habitId, dateKey) {
+      if (!appState.logs[dateKey]) {
+        appState.logs[dateKey] = {};
+      }
+      appState.logs[dateKey][habitId] = !appState.logs[dateKey][habitId];
+      if (!appState.logs[dateKey][habitId]) {
+        delete appState.logs[dateKey][habitId];
+      }
+      saveState();
+      renderAll();
+    }
+
+    // "Never Miss Twice" Detector:
+    // A habit triggers "Never Miss Twice" on `referenceDateKey` if it was NOT completed on `referenceDateKey - 1`
+    // AND is not yet completed on `referenceDateKey`, while having at least 1 completion in the prior 7 days.
+    function isNeverMissTwice(habitId, referenceDateKey = selectedDateKey) {
+      if (isHabitDone(habitId, referenceDateKey)) return false;
+      const prevDayKey = addDays(referenceDateKey, -1);
+      if (isHabitDone(habitId, prevDayKey)) return false;
+
+      // Check if the user has been tracking this habit recently (or if it's an active habit)
+      return true;
+    }
+
+    // Active Streak Calculation for a Habit (up to todayKey)
+    function getHabitActiveStreak(habitId) {
+      let streak = 0;
+      let cursor = isHabitDone(habitId, todayKey) ? todayKey : addDays(todayKey, -1);
+
+      while (isHabitDone(habitId, cursor)) {
+        streak++;
+        cursor = addDays(cursor, -1);
+        if (streak > 3650) break;
+      }
+      return streak;
+    }
+
+    function getDayCompletionStats(dateKey) {
+      const total = appState.habits.length;
+      if (total === 0) return { done: 0, total: 0, pct: 0 };
+      const done = appState.habits.filter(h => isHabitDone(h.id, dateKey)).length;
+      return {
+        done,
+        total,
+        pct: Math.round((done / total) * 100)
+      };
+    }
+
+    // Theme Handling
+    function applyTheme() {
+      const htmlEl = document.documentElement;
+      const metaTheme = document.getElementById('theme-color-meta');
+      if (appState.theme === 'light') {
+        htmlEl.classList.remove('dark');
+        if (metaTheme) metaTheme.setAttribute('content', '#f8fafc');
+      } else {
+        htmlEl.classList.add('dark');
+        if (metaTheme) metaTheme.setAttribute('content', '#0b0f19');
+      }
+    }
+
+    function toggleTheme() {
+      appState.theme = appState.theme === 'dark' ? 'light' : 'dark';
+      saveState();
+      applyTheme();
+      showToast(appState.theme === 'dark' ? 'Dark Mode Activated' : 'Light Mode Activated', '🎨');
+    }
+
+    // Navigation & Filtering
+    function selectDate(dateKey) {
+      selectedDateKey = dateKey;
+      currentWeekStartKey = getStartOfWeek(dateKey);
+      renderAll();
+    }
+
+    function shiftWeek(direction) {
+      currentWeekStartKey = addDays(currentWeekStartKey, direction * 7);
+      selectedDateKey = currentWeekStartKey;
+      renderAll();
+    }
+
+    function jumpToToday() {
+      selectedDateKey = todayKey;
+      currentWeekStartKey = getStartOfWeek(todayKey);
+      renderAll();
+    }
+
+    function setCategoryFilter(category) {
+      activeCategoryFilter = category;
+      renderAll();
+    }
+
+    function markAllSelectedDay() {
+      if (!appState.logs[selectedDateKey]) {
+        appState.logs[selectedDateKey] = {};
+      }
+      const targetHabits = activeCategoryFilter === 'ALL'
+        ? appState.habits
+        : appState.habits.filter(h => h.category === activeCategoryFilter);
+
+      const allAlreadyDone = targetHabits.every(h => isHabitDone(h.id, selectedDateKey));
+      targetHabits.forEach(h => {
+        appState.logs[selectedDateKey][h.id] = !allAlreadyDone;
+      });
+      saveState();
+      renderAll();
+      showToast(allAlreadyDone ? 'Cleared selected habits' : 'All habits completed for day!', '⚡');
+    }
+
+    function switchMobileTab(tab) {
+      mobileActiveTab = tab;
+      const dailyPanel = document.getElementById('panel-daily');
+      const analyticsPanel = document.getElementById('panel-analytics');
+      const tabDailyBtn = document.getElementById('mob-tab-daily');
+      const tabAnalyticsBtn = document.getElementById('mob-tab-analytics');
+
+      if (tab === 'daily') {
+        dailyPanel.classList.remove('hidden');
+        analyticsPanel.classList.add('hidden');
+        tabDailyBtn.className = 'tap-scale flex flex-col items-center justify-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold';
+        tabAnalyticsBtn.className = 'tap-scale flex flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400 font-medium';
+      } else {
+        dailyPanel.classList.add('hidden', 'lg:block');
+        analyticsPanel.classList.remove('hidden');
+        tabAnalyticsBtn.className = 'tap-scale flex flex-col items-center justify-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold';
+        tabDailyBtn.className = 'tap-scale flex flex-col items-center justify-center gap-1 text-slate-500 dark:text-slate-400 font-medium';
+      }
+    }
+
+    // UI Renderers
+    function renderKPIs() {
+      // 1. Selected Day Progress
+      const dayStats = getDayCompletionStats(selectedDateKey);
+      const isSelectedToday = selectedDateKey === todayKey;
+      document.getElementById('kpi-day-label').textContent = isSelectedToday ? "Today's Completion" : `Completion (${selectedDateKey.slice(5)})`;
+      document.getElementById('kpi-daily-count').textContent = `${dayStats.done}/${dayStats.total}`;
+      document.getElementById('kpi-daily-pct').textContent = `${dayStats.pct}%`;
+      document.getElementById('kpi-daily-bar').style.width = `${dayStats.pct}%`;
+
+      const statusEl = document.getElementById('kpi-daily-status');
+      if (dayStats.pct === 100 && dayStats.total > 0) {
+        statusEl.textContent = 'Perfect Day ★';
+      } else if (dayStats.pct >= 60) {
+        statusEl.textContent = 'Strong Vote';
+      } else if (dayStats.pct > 0) {
+        statusEl.textContent = 'In Motion';
+      } else {
+        statusEl.textContent = 'Cast 1st Vote';
+      }
+
+      // 2. Weekly Consistency KPI (%)
+      const weekDates = getWeekDateKeys(currentWeekStartKey);
+      const totalPossibleWeek = appState.habits.length * 7;
+      let totalDoneWeek = 0;
+      weekDates.forEach(dKey => {
+        totalDoneWeek += getDayCompletionStats(dKey).done;
+      });
+      const weeklyPct = totalPossibleWeek > 0 ? Math.round((totalDoneWeek / totalPossibleWeek) * 100) : 0;
+      document.getElementById('kpi-weekly-pct').textContent = `${weeklyPct}%`;
+      document.getElementById('kpi-weekly-fraction').textContent = `${totalDoneWeek}/${totalPossibleWeek} votes`;
+
+      // 3. Best Active Streak
+      let bestStreak = 0;
+      let bestHabitName = 'Start your chain today';
+      appState.habits.forEach(h => {
+        const s = getHabitActiveStreak(h.id);
+        if (s > bestStreak) {
+          bestStreak = s;
+          bestHabitName = h.name;
+        }
+      });
+      document.getElementById('kpi-best-streak').textContent = bestStreak;
+      document.getElementById('kpi-best-streak-habit').textContent = bestStreak > 0 ? bestHabitName : 'Check in today to ignite';
+
+      // 4. Never Miss Twice Recovery Count
+      const recoveryHabits = appState.habits.filter(h => isNeverMissTwice(h.id, selectedDateKey));
+      const recoveryCount = recoveryHabits.length;
+      const recoveryCountEl = document.getElementById('kpi-recovery-count');
+      const recoveryDescEl = document.getElementById('kpi-recovery-desc');
+      const recoveryCard = document.getElementById('kpi-recovery-card');
+
+      recoveryCountEl.textContent = recoveryCount;
+      if (recoveryCount > 0) {
+        recoveryCountEl.className = 'text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-amber-500';
+        recoveryDescEl.textContent = `${recoveryCount} missed yesterday — recover now`;
+        recoveryCard.classList.add('border-amber-500/40');
+      } else {
+        recoveryCountEl.className = 'text-2xl sm:text-3xl font-extrabold font-mono tracking-tight text-emerald-500';
+        recoveryDescEl.textContent = 'Zero consecutive misses!';
+        recoveryCard.classList.remove('border-amber-500/40');
+      }
+    }
+
+    function renderWeekStrip() {
+      const weekDates = getWeekDateKeys(currentWeekStartKey);
+      const firstDate = parseDateKey(weekDates[0]);
+      const lastDate = parseDateKey(weekDates[6]);
+
+      const fmtShort = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+      document.getElementById('week-range-title').textContent = `${fmtShort.format(firstDate)} – ${fmtShort.format(lastDate)}, ${lastDate.getFullYear()}`;
+
+      const selectedDateObj = parseDateKey(selectedDateKey);
+      const fmtFull = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      document.getElementById('selected-date-full').textContent = fmtFull.format(selectedDateObj);
+
+      const pill = document.getElementById('selected-day-pill');
+      if (selectedDateKey === todayKey) {
+        pill.textContent = 'Today';
+        pill.className = 'px-2 py-0.5 text-[10px] font-mono font-semibold uppercase rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300';
+      } else if (selectedDateKey < todayKey) {
+        pill.textContent = 'History Log';
+        pill.className = 'px-2 py-0.5 text-[10px] font-mono font-semibold uppercase rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300';
+      } else {
+        pill.textContent = 'Planned';
+        pill.className = 'px-2 py-0.5 text-[10px] font-mono font-semibold uppercase rounded-full bg-indigo-500/15 text-indigo-600 dark:text-indigo-300';
+      }
+
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const stripGrid = document.getElementById('week-strip-grid');
+
+      stripGrid.innerHTML = weekDates.map((dKey, idx) => {
+        const dt = parseDateKey(dKey);
+        const dayNum = dt.getDate();
+        const isSelected = dKey === selectedDateKey;
+        const isToday = dKey === todayKey;
+        const stats = getDayCompletionStats(dKey);
+
+        // Status dots per habit (up to 5 dots)
+        const dotsHtml = appState.habits.slice(0, 5).map(h => {
+          const done = isHabitDone(h.id, dKey);
+          const catDot = CATEGORY_STYLES[h.category]?.dot || 'bg-indigo-500';
+          return `<span class="w-1.5 h-1.5 rounded-full ${done ? catDot : 'bg-slate-300 dark:bg-slate-700'}"></span>`;
+        }).join('');
+
+        const btnClasses = isSelected
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-400'
+          : isToday
+            ? 'bg-indigo-500/10 dark:bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30'
+            : 'bg-slate-100/80 hover:bg-slate-200/70 dark:bg-white/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 border border-transparent';
+
+        return `
+          <button onclick="selectDate('${dKey}')" class="tap-scale rounded-xl py-2.5 px-1 flex flex-col items-center justify-between transition ${btnClasses}">
+            <span class="text-[10px] font-semibold uppercase tracking-wider ${isSelected ? 'text-indigo-100' : 'text-slate-400'}">${dayNames[idx]}</span>
+            <span class="text-sm sm:text-base font-extrabold font-mono my-1">${dayNum}</span>
+            <div class="flex items-center justify-center gap-0.5 h-2">
+              ${dotsHtml}
+            </div>
+            <span class="text-[9px] font-mono mt-1 ${isSelected ? 'text-indigo-100' : stats.pct === 100 && stats.total > 0 ? 'text-emerald-500 font-bold' : 'text-slate-400'}">
+              ${stats.pct}%
+            </span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderCategoryFilterPills() {
+      const buttons = document.querySelectorAll('.cat-pill');
+      buttons.forEach(btn => {
+        const cat = btn.getAttribute('data-cat');
+        if (cat === activeCategoryFilter) {
+          btn.className = 'cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white shadow-sm shadow-indigo-500/25 flex items-center gap-1.5 shrink-0';
+        } else {
+          btn.className = 'cat-pill tap-scale px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-200/70 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center gap-1.5 shrink-0';
+        }
+      });
+    }
+
+    function renderDailyHabits() {
+      const container = document.getElementById('habit-cards-list');
+      const banner = document.getElementById('recovery-alert-banner');
+
+      const filtered = activeCategoryFilter === 'ALL'
+        ? appState.habits
+        : appState.habits.filter(h => h.category === activeCategoryFilter);
+
+      // Sort: "Never Miss Twice" priority habits at the top if unchecked, then regular order
+      const sortedHabits = [...filtered].sort((a, b) => {
+        const aRisk = isNeverMissTwice(a.id, selectedDateKey) ? 1 : 0;
+        const bRisk = isNeverMissTwice(b.id, selectedDateKey) ? 1 : 0;
+        return bRisk - aRisk;
+      });
+
+      const anyRecoveryRisk = appState.habits.some(h => isNeverMissTwice(h.id, selectedDateKey));
+      if (anyRecoveryRisk) {
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      if (sortedHabits.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card rounded-2xl p-8 text-center">
+            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">No habits in this category yet.</p>
+            <p class="text-xs text-slate-400 mt-1">Click "+ New Habit" to design an identity-based routine.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = sortedHabits.map(habit => {
+        const done = isHabitDone(habit.id, selectedDateKey);
+        const neverMiss = isNeverMissTwice(habit.id, selectedDateKey);
+        const streak = getHabitActiveStreak(habit.id);
+        const style = CATEGORY_STYLES[habit.category] || CATEGORY_STYLES.Research;
+
+        const cardBorder = neverMiss
+          ? 'border-amber-500/60 dark:border-amber-500/50 never-miss-pulse'
+          : done
+            ? 'border-emerald-500/40 dark:border-emerald-500/30 bg-emerald-500/[0.03]'
+            : '';
+
+        return `
+          <div class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm transition-all duration-200 ${cardBorder}">
+            <div class="flex items-start gap-3.5">
+              <!-- Thumb-friendly Check Button -->
+              <button onclick="toggleHabitCompletion('${habit.id}', '${selectedDateKey}')"
+                aria-label="Toggle ${habit.name}"
+                class="tap-scale mt-0.5 w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 transition-all ${
+                  done
+                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 animate-check'
+                    : neverMiss
+                      ? 'bg-amber-500/15 border-2 border-amber-500 text-amber-500 hover:bg-amber-500/25'
+                      : 'bg-slate-100 dark:bg-slate-800/90 border-2 border-slate-300 dark:border-slate-700 text-transparent hover:border-indigo-500'
+                }">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </button>
+
+              <!-- Habit Details -->
+              <div class="flex-1 min-w-0">
+                <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                  <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md border ${style.badge}">
+                    ${habit.category}
+                  </span>
+
+                  <span class="px-2 py-0.5 text-[10px] font-mono font-medium rounded-md bg-slate-200/70 dark:bg-white/5 text-slate-600 dark:text-slate-300">
+                    🎯 ${habit.target}
+                  </span>
+
+                  ${neverMiss ? `
+                    <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded-md bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1">
+                      ⚡ Never Miss Twice
+                    </span>
+                  ` : ''}
+
+                  <div class="ml-auto flex items-center gap-2">
+                    <span class="text-xs font-mono font-bold ${streak > 0 ? 'text-amber-500' : 'text-slate-400'}" title="Current Active Streak">
+                      🔥 ${streak}d
+                    </span>
+                    <button onclick="openHabitModal('${habit.id}')" title="Edit Habit" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <h4 onclick="toggleHabitCompletion('${habit.id}', '${selectedDateKey}')"
+                  class="cursor-pointer text-sm sm:text-base font-bold tracking-tight transition ${done ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'}">
+                  ${habit.name}
+                </h4>
+
+                <!-- Identity Goal Statement ("Who I am becoming") -->
+                <div class="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 italic">
+                  <span class="not-italic text-[11px] font-semibold text-indigo-500 dark:text-indigo-400 shrink-0">Identity:</span>
+                  <span class="truncate">"${habit.identity}"</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderWeeklyAnalyticsAndMatrix() {
+      const weekDates = getWeekDateKeys(currentWeekStartKey);
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      // 1. Weekly Completion Bar Chart (7 days)
+      const chartContainer = document.getElementById('weekly-bar-chart');
+      const labelsContainer = document.getElementById('weekly-bar-labels');
+
+      let sumPct = 0;
+      chartContainer.innerHTML = weekDates.map((dKey) => {
+        const stats = getDayCompletionStats(dKey);
+        sumPct += stats.pct;
+        const isSelected = dKey === selectedDateKey;
+        const isToday = dKey === todayKey;
+        const barHeight = Math.max(stats.pct, 6);
+
+        const barColor = stats.pct === 100 && stats.total > 0
+          ? 'bg-gradient-to-t from-emerald-600 to-emerald-400'
+          : isSelected
+            ? 'bg-gradient-to-t from-indigo-600 to-indigo-400'
+            : 'bg-slate-300 dark:bg-slate-700 hover:bg-indigo-400';
+
+        return `
+          <div onclick="selectDate('${dKey}')" class="cursor-pointer flex-1 flex flex-col items-center justify-end h-full group">
+            <span class="text-[10px] font-mono font-bold mb-1 ${isSelected ? 'text-indigo-500 dark:text-indigo-300' : 'text-slate-400 group-hover:text-slate-200'}">
+              ${stats.pct}%
+            </span>
+            <div class="w-full max-w-[34px] rounded-t-xl transition-all duration-500 ${barColor} ${isToday ? 'ring-2 ring-indigo-400/50' : ''}"
+                 style="height: ${barHeight}%"></div>
+          </div>
+        `;
+      }).join('');
+
+      labelsContainer.innerHTML = weekDates.map((dKey, idx) => {
+        const dt = parseDateKey(dKey);
+        const isSelected = dKey === selectedDateKey;
+        return `
+          <button onclick="selectDate('${dKey}')" class="text-[11px] font-mono ${isSelected ? 'font-bold text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}">
+            <div>${dayNames[idx]}</div>
+            <div class="text-[10px] opacity-75">${dt.getDate()}</div>
+          </button>
+        `;
+      }).join('');
+
+      const avgWeekPct = Math.round(sumPct / 7);
+      document.getElementById('chart-avg-badge').textContent = `Avg: ${avgWeekPct}%`;
+
+      // 2. 7-Day Interactive Habit Matrix
+      const headerRow = document.getElementById('matrix-header-row');
+      headerRow.innerHTML = `
+        <th class="py-2 pr-2 font-sans font-semibold text-slate-500 dark:text-slate-400">Habit</th>
+        ${weekDates.map((dKey, idx) => {
+          const dt = parseDateKey(dKey);
+          const isToday = dKey === todayKey;
+          return `
+            <th class="py-2 px-1 text-center ${isToday ? 'text-indigo-500 dark:text-indigo-400 font-bold' : ''}">
+              <div>${dayNames[idx][0]}</div>
+              <div class="text-[10px]">${dt.getDate()}</div>
+            </th>
+          `;
+        }).join('')}
+        <th class="py-2 pl-2 text-right">🔥</th>
+      `;
+
+      const bodyRows = document.getElementById('matrix-body-rows');
+      let totalWeekCheckins = 0;
+
+      bodyRows.innerHTML = appState.habits.map(habit => {
+        const style = CATEGORY_STYLES[habit.category] || CATEGORY_STYLES.Research;
+        const streak = getHabitActiveStreak(habit.id);
+
+        const cellsHtml = weekDates.map(dKey => {
+          const done = isHabitDone(habit.id, dKey);
+          if (done) totalWeekCheckins++;
+          const neverMissCell = !done && dKey === todayKey && isNeverMissTwice(habit.id, todayKey);
+
+          return `
+            <td class="py-2.5 px-1 text-center">
+              <button onclick="toggleHabitCompletion('${habit.id}', '${dKey}')"
+                title="${habit.name} (${dKey})"
+                class="tap-scale w-7 h-7 rounded-lg mx-auto flex items-center justify-center transition ${
+                  done
+                    ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30'
+                    : neverMissCell
+                      ? 'bg-amber-500/20 border border-amber-500 text-amber-500'
+                      : 'bg-slate-200/80 dark:bg-slate-800/90 hover:bg-slate-300 dark:hover:bg-slate-700 text-transparent'
+                }">
+                ${done ? `
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ` : neverMissCell ? `<span class="text-[11px]">⚡</span>` : ''}
+              </button>
+            </td>
+          `;
+        }).join('');
+
+        return `
+          <tr class="group hover:bg-slate-100/50 dark:hover:bg-white/[0.02]">
+            <td class="py-2.5 pr-2 max-w-[140px]">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full shrink-0 ${style.dot}"></span>
+                <span class="font-semibold truncate text-slate-800 dark:text-slate-200" title="${habit.name}">${habit.name}</span>
+              </div>
+            </td>
+            ${cellsHtml}
+            <td class="py-2.5 pl-2 text-right font-mono font-bold text-amber-500">${streak}d</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('matrix-summary-stat').textContent = `${totalWeekCheckins} check-ins this week`;
+
+      // 3. Identity Domain Breakdown
+      const categories = ['Research', 'Language', 'Vitality', 'Synthesis'];
+      const domainContainer = document.getElementById('identity-domain-bars');
+
+      domainContainer.innerHTML = categories.map(cat => {
+        const catHabits = appState.habits.filter(h => h.category === cat);
+        const possible = catHabits.length * 7;
+        let castVotes = 0;
+        catHabits.forEach(h => {
+          weekDates.forEach(dKey => {
+            if (isHabitDone(h.id, dKey)) castVotes++;
+          });
+        });
+        const pct = possible > 0 ? Math.round((castVotes / possible) * 100) : 0;
+        const style = CATEGORY_STYLES[cat];
+
+        return `
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-semibold flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full ${style.dot}"></span>
+                ${cat}
+              </span>
+              <span class="font-mono text-slate-500 dark:text-slate-400">${castVotes}/${possible} votes (${pct}%)</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+              <div class="h-full ${style.bar} rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAll() {
+      applyTheme();
+      renderKPIs();
+      renderWeekStrip();
+      renderCategoryFilterPills();
+      renderDailyHabits();
+      renderWeeklyAnalyticsAndMatrix();
+    }
+
+    // Modal Controls: Create / Edit Habit
+    function openHabitModal(habitId = null) {
+      const modal = document.getElementById('habit-modal');
+      const title = document.getElementById('habit-modal-title');
+      const idInput = document.getElementById('habit-id-input');
+      const nameInput = document.getElementById('habit-name-input');
+      const identityInput = document.getElementById('habit-identity-input');
+      const catInput = document.getElementById('habit-category-input');
+      const targetInput = document.getElementById('habit-target-input');
+      const deleteBtn = document.getElementById('btn-delete-habit');
+
+      if (habitId) {
+        const existing = appState.habits.find(h => h.id === habitId);
+        if (!existing) return;
+        title.textContent = 'Edit Identity-Based Habit';
+        idInput.value = existing.id;
+        nameInput.value = existing.name;
+        identityInput.value = existing.identity;
+        catInput.value = existing.category;
+        targetInput.value = existing.target;
+        deleteBtn.classList.remove('hidden');
+      } else {
+        title.textContent = 'Create Identity-Based Habit';
+        idInput.value = '';
+        nameInput.value = '';
+        identityInput.value = '';
+        catInput.value = 'Research';
+        targetInput.value = '';
+        deleteBtn.classList.add('hidden');
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      nameInput.focus();
+    }
+
+    function closeHabitModal() {
+      const modal = document.getElementById('habit-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function saveHabitForm(event) {
+      event.preventDefault();
+      const id = document.getElementById('habit-id-input').value.trim();
+      const name = document.getElementById('habit-name-input').value.trim();
+      const identity = document.getElementById('habit-identity-input').value.trim();
+      const category = document.getElementById('habit-category-input').value;
+      const target = document.getElementById('habit-target-input').value.trim();
+
+      if (!name || !identity) return;
+
+      if (id) {
+        const idx = appState.habits.findIndex(h => h.id === id);
+        if (idx !== -1) {
+          appState.habits[idx] = { ...appState.habits[idx], name, identity, category, target };
+        }
+        showToast('Habit updated', '✅');
+      } else {
+        const newHabit = {
+          id: 'hab_' + Date.now().toString(36),
+          name,
+          identity,
+          category,
+          target
+        };
+        appState.habits.push(newHabit);
+        showToast('New identity habit added!', '🚀');
+      }
+
+      saveState();
+      closeHabitModal();
+      renderAll();
+    }
+
+    function deleteCurrentHabit() {
+      const id = document.getElementById('habit-id-input').value;
+      if (!id) return;
+      appState.habits = appState.habits.filter(h => h.id !== id);
+      saveState();
+      closeHabitModal();
+      renderAll();
+      showToast('Habit removed', '🗑️');
+    }
+
+    // Modal Controls: Data Backup & Cloud Sync
+    function openDataModal() {
+      const modal = document.getElementById('data-modal');
+      const rawConfig = localStorage.getItem(CLOUD_CONFIG_KEY);
+      if (rawConfig) {
+        try {
+          const cfg = JSON.parse(rawConfig);
+          document.getElementById('cloud-endpoint-input').value = cfg.endpoint || '';
+          document.getElementById('cloud-apikey-input').value = cfg.apiKey || '';
+          document.getElementById('sync-status-badge').textContent = cfg.endpoint ? 'Endpoint Ready' : 'Not Configured';
+        } catch (e) {}
+      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeDataModal() {
+      const modal = document.getElementById('data-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function exportDataJSON() {
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        app: 'Atomic Habit & Streak Tracker',
+        version: 1,
+        state: appState
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `atomic-habits-backup-${todayKey}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Exported JSON backup', '📦');
+    }
+
+    function importDataJSON(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const candidate = parsed.state ? parsed.state : parsed;
+          if (candidate && Array.isArray(candidate.habits) && candidate.logs) {
+            appState = candidate;
+            saveState();
+            renderAll();
+            closeDataModal();
+            showToast('Backup restored successfully!', '🎉');
+          } else {
+            showToast('Invalid JSON format', '⚠️');
+          }
+        } catch (err) {
+          showToast('Failed to parse JSON file', '⚠️');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function resetToAcademicDemo() {
+      appState = createDefaultSeedData();
+      saveState();
+      renderAll();
+      closeDataModal();
+      showToast('Demo seed data restored', '🔄');
+    }
+
+    // Cloud Sync Hook (GitHub Secret Gist / Firebase Realtime DB / Supabase REST)
+    function getStoredCloudConfig() {
+      try {
+        const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
+        return raw ? JSON.parse(raw) : { endpoint: '', apiKey: '' };
+      } catch (e) {
+        return { endpoint: '', apiKey: '' };
+      }
+    }
+
+    function saveCloudConfig() {
+      const endpoint = document.getElementById('cloud-endpoint-input').value.trim();
+      const apiKey = document.getElementById('cloud-apikey-input').value.trim();
+      localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
+      document.getElementById('sync-status-badge').textContent = endpoint ? 'Auto-Sync Ready ✓' : 'Not Configured';
+      showToast('Cloud sync configuration saved', '☁️');
+    }
+
+    async function pushToCloud(silent = false) {
+      const cfg = getStoredCloudConfig();
+      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint;
+      const apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
+      if (!endpoint) {
+        if (!silent) showToast('Enter a cloud endpoint URL first', '⚠️');
+        return;
+      }
+      if (!silent) saveCloudConfig();
+
+      try {
+        const isGist = endpoint.includes('api.github.com/gists/');
+        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' };
+        if (apiKey) {
+          headers['Authorization'] = isGist ? `Bearer ${apiKey}` : `Bearer ${apiKey}`;
+          if (!isGist) headers['apikey'] = apiKey;
+        }
+
+        const payloadObj = { updatedAt: new Date().toISOString(), state: appState };
+        const body = isGist
+          ? JSON.stringify({
+              description: 'Atomic Habit & Streak Tracker — Cloud Sync State',
+              files: { 'atomic_habits_state.json': { content: JSON.stringify(payloadObj, null, 2) } }
+            })
+          : JSON.stringify(payloadObj);
+
+        const res = await fetch(endpoint, {
+          method: isGist ? 'PATCH' : 'PUT',
+          headers,
+          body
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const badge = document.getElementById('sync-status-badge');
+        if (badge) badge.textContent = 'Synced ✓';
+        if (!silent) showToast('Pushed state to Cloud!', '☁️');
+      } catch (err) {
+        if (!silent) showToast(`Cloud push failed: ${err.message}`, '⚠️');
+      }
+    }
+
+    async function pullFromCloud(silent = false) {
+      const cfg = getStoredCloudConfig();
+      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint;
+      const apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
+      if (!endpoint) {
+        if (!silent) showToast('Enter a cloud endpoint URL first', '⚠️');
+        return;
+      }
+      if (!silent) saveCloudConfig();
+
+      try {
+        const isGist = endpoint.includes('api.github.com/gists/');
+        const headers = { 'Accept': isGist ? 'application/vnd.github+json' : 'application/json' };
+        if (apiKey) {
+          headers['Authorization'] = `Bearer ${apiKey}`;
+          if (!isGist) headers['apikey'] = apiKey;
+        }
+        const res = await fetch(endpoint, { method: 'GET', headers, cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        let remoteState = null;
+        if (isGist && data?.files?.['atomic_habits_state.json']?.content) {
+          const parsedGist = JSON.parse(data.files['atomic_habits_state.json'].content);
+          remoteState = parsedGist?.state || parsedGist;
+        } else {
+          remoteState = data?.state || data;
+        }
+
+        if (remoteState && Array.isArray(remoteState.habits) && remoteState.logs) {
+          appState = remoteState;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+          renderAll();
+          const badge = document.getElementById('sync-status-badge');
+          if (badge) badge.textContent = 'Pulled ✓';
+          if (!silent) showToast('Synced latest state from Cloud!', '☁️');
+        } else if (!silent) {
+          showToast('No valid state found at endpoint', '⚠️');
+        }
+      } catch (err) {
+        if (!silent) showToast(`Cloud pull failed: ${err.message}`, '⚠️');
+      }
+    }
+
+    function copyIphoneMagicLink() {
+      const cfg = getStoredCloudConfig();
+      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint;
+      const apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
+      const baseUrl = location.origin + location.pathname;
+      const magicUrl = endpoint
+        ? `${baseUrl}#sync_endpoint=${encodeURIComponent(endpoint)}&sync_key=${encodeURIComponent(apiKey)}`
+        : baseUrl;
+      navigator.clipboard.writeText(magicUrl).then(() => {
+        showToast('Copied iPhone Magic Link!', '📱');
+      }).catch(() => {
+        prompt('Copy this iPhone Magic Link:', magicUrl);
+      });
+    }
+
+    function checkMagicLinkPairing() {
+      if (!location.hash || !location.hash.includes('sync_endpoint=')) return;
+      const params = new URLSearchParams(location.hash.slice(1));
+      const endpoint = params.get('sync_endpoint');
+      const apiKey = params.get('sync_key') || '';
+      if (endpoint) {
+        localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
+        history.replaceState(null, '', location.pathname + location.search);
+        showToast('iPhone Cloud Sync Paired Automatically!', '⚡');
+        pullFromCloud(true);
+      }
+    }
+
+    // Toast Helper
+    let toastTimeout = null;
+    function showToast(message, icon = '✨') {
+      const container = document.getElementById('toast-container');
+      document.getElementById('toast-message').textContent = message;
+      document.getElementById('toast-icon').textContent = icon;
+      container.classList.remove('opacity-0', 'translate-y-2');
+      container.classList.add('opacity-100', 'translate-y-0');
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        container.classList.add('opacity-0', 'translate-y-2');
+        container.classList.remove('opacity-100', 'translate-y-0');
+      }, 2400);
+    }
+
+    // Initialize Application
+    window.addEventListener('DOMContentLoaded', async () => {
+      checkMagicLinkPairing();
+      await loadState();
+      renderAll();
+      // Auto-pull latest cloud state if configured
+      const cfg = getStoredCloudConfig();
+      if (cfg.endpoint) {
+        pullFromCloud(true);
+      }
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>
