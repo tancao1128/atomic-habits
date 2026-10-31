@@ -2014,7 +2014,6 @@
       reader.readAsText(file);
     }
 
-    const DEFAULT_GIST_ENDPOINT = 'https://api.github.com/gists/938d0babf550630ef80c5f709ba21c33';
 
     function getStoredCloudConfig() {
       try {
@@ -2022,16 +2021,16 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           return {
-            endpoint: parsed.endpoint || DEFAULT_GIST_ENDPOINT,
+            endpoint: parsed.endpoint || '',
             apiKey: parsed.apiKey || ''
           };
         }
       } catch (e) {}
-      return { endpoint: DEFAULT_GIST_ENDPOINT, apiKey: '' };
+      return { endpoint: '', apiKey: '' };
     }
 
     function saveCloudConfig() {
-      const endpoint = document.getElementById('cloud-endpoint-input').value.trim() || DEFAULT_GIST_ENDPOINT;
+      const endpoint = document.getElementById('cloud-endpoint-input').value.trim();
       const apiKey = document.getElementById('cloud-apikey-input').value.trim();
       localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
       setSaveStatus('Đã lưu cấu hình; chưa xác minh đồng bộ');
@@ -2139,6 +2138,21 @@
       }
     }
 
+    function consumeGistLink() {
+      if (!location.hash) return;
+      const params = new URLSearchParams(location.hash.slice(1));
+      if (!params.has('g')) return;
+      const id = params.get('g');
+      history.replaceState(null, '', location.pathname + location.search);
+      if (!/^[0-9a-f]{32}$/i.test(id)) {
+        setSaveStatus('Link Gist không hợp lệ');
+        return;
+      }
+      const cfg = getStoredCloudConfig();
+      cfg.endpoint = 'https://api.github.com/gists/' + id;
+      localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cfg));
+    }
+
     let toastTimeout = null;
     function showToast(message, icon = '✨') {
       const container = document.getElementById('toast-container');
@@ -2154,6 +2168,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
+      consumeGistLink();
       await loadState();
       await loadPracticeState();
       renderAll();

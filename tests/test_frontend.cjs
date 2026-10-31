@@ -13,6 +13,14 @@ function setup({host='localhost',fetchImpl,failStorage=false}={}) {
   return {ctx,elements,map};
 }
 const response=(value,ok=true)=>({ok,json:async()=>value,status:ok?200:503});
+test('private link configures endpoint and clears fragment without logging it',()=>{
+ const {ctx,map}=setup();const id='a'.repeat(32);let replaced;
+ ctx.location.hash='#g='+id;ctx.location.pathname='/atomic-habits/';ctx.location.search='';
+ ctx.history={replaceState:(state,title,url)=>{replaced=url}};
+ vm.runInContext('consumeGistLink()',ctx);
+ assert.equal(JSON.parse(map.get('atomic_habit_cloud_config_v1')).endpoint,'https://api.github.com/gists/'+id);
+ assert.equal(replaced,'/atomic-habits/');
+});
 test('pairing link contains no token and no QR service request',async()=>{
  let copied='';const {ctx}=setup();
  ctx.navigator.clipboard={writeText:async value=>{copied=value}};

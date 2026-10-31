@@ -79,6 +79,7 @@ class CloudPushTests(unittest.TestCase):
     def test_push_nonzero_and_readback_failure(self):
         from types import SimpleNamespace
         state={'habits':[],'logs':{}}
+        configured=patch.object(srv,'configured_gist_id',return_value='f'*32);configured.start();self.addCleanup(configured.stop)
         with patch.object(srv.subprocess,'run',return_value=SimpleNamespace(returncode=1)),patch.object(srv,'pull_gist_state') as read:
             self.assertFalse(srv.push_gist(state)[0]);read.assert_not_called()
         with patch.object(srv.subprocess,'run',return_value=SimpleNamespace(returncode=0)),patch.object(srv,'pull_gist_state',return_value={'state':{'different':1}}):
@@ -89,9 +90,28 @@ class CloudPushTests(unittest.TestCase):
 class CloudFailureTests(unittest.TestCase):
     def test_timeouts_are_reported_without_exception(self):
         from subprocess import TimeoutExpired
-        with patch.object(srv.subprocess,'run',side_effect=TimeoutExpired('gh',10)):
+        with patch.object(srv,'configured_gist_id',return_value='f'*32), patch.object(srv.subprocess,'run',side_effect=TimeoutExpired('gh',10)):
             result,error=srv.push_gist({'habits':[],'logs':{}})
         self.assertFalse(result);self.assertTrue(error)
+
+class PrivateConfigurationTests(unittest.TestCase):
+    def test_missing_or_invalid_config_never_calls_github(self):
+        with tempfile.TemporaryDirectory() as d, patch.object(srv,'CLOUD_META_FILE',Path(d)/'config.json'), patch.object(srv.subprocess,'run') as run:
+            self.assertIsNone(srv.pull_gist_state());self.assertFalse(srv.push_gist({'habits':[],'logs':{}})[0]);run.assert_not_called()
+    def test_configured_gist_is_loaded_from_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=Path(d)/'config.json';p.write_text(json.dumps({'gist_id':'a'*32}))
+            with patch.object(srv,'CLOUD_META_FILE',p): self.assertEqual(srv.configured_gist_id(),'a'*32)
+    def test_current_tracked_tree_contains_no_old_gist_id(self):
+        import re, subprocess
+        root=Path(__file__).resolve().parents[1]
+        previous=subprocess.check_output(['git','show','a987f22:server.py'],cwd=root,text=True)
+        old=re.search(r'DEFAULT_GIST_ID\s*=\s*"([0-9a-f]{32})"',previous).group(1)
+        files=subprocess.check_output(['git','ls-files','-z'],cwd=root).split(b'\0')
+        for name in files:
+            if not name:continue
+            path=root / name.decode()
+            if path.exists(): self.assertNotIn(old.encode(),path.read_bytes(),str(path))
 
 class SaveUnavailableTests(SaveStateTests):
     def test_cloud_unavailable_does_not_push(self):

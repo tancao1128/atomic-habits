@@ -6,6 +6,7 @@ Serves static files and provides /api/state to automatically persist state to
 the Secret GitHub Gist so iPhone (over 4G/5G) and MacBook stay in sync 24/7.
 """
 import json
+import re
 import os
 import subprocess
 import threading
@@ -24,7 +25,6 @@ BACKUP_DIR = DATA_DIR / "backups"
 BASELINE_FILE = DATA_DIR / "sync_baseline.json"
 PRACTICE_BASELINE_FILE = DATA_DIR / "practice_sync_baseline.json"
 PORT = int(os.environ.get("ATOMIC_HABIT_PORT", "8765"))
-DEFAULT_GIST_ID = "938d0babf550630ef80c5f709ba21c33"
 PRACTICE_GIST_FILENAME = "atomic_practice_state.json"
 DISABLE_GIST_SYNC = os.environ.get("ATOMIC_HABIT_DISABLE_GIST", "0") == "1"
 GH_BIN = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
@@ -33,18 +33,18 @@ GH_BIN = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "g
 def ensure_dirs():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    CLOUD_META_FILE.parent.mkdir(parents=True, exist_ok=True)
-    if not CLOUD_META_FILE.exists():
-        CLOUD_META_FILE.write_text(
-            json.dumps(
-                {
-                    "gist_id": DEFAULT_GIST_ID,
-                    "endpoint": f"https://api.github.com/gists/{DEFAULT_GIST_ID}",
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+
+
+def configured_gist_id():
+    """Read the private Gist location from local, ignored configuration."""
+    try:
+        meta = json.loads(CLOUD_META_FILE.read_text(encoding="utf-8"))
+        gist_id = meta.get("gist_id", "")
+        if isinstance(gist_id, str) and re.fullmatch(r"[0-9a-fA-F]{32}", gist_id):
+            return gist_id
+    except (OSError, ValueError, AttributeError):
+        pass
+    return None
 
 
 # Serialize local saves so two app requests cannot finish in reverse order.
@@ -53,12 +53,15 @@ SAVE_LOCK = threading.Lock()
 
 def push_gist(state_obj: dict):
     """Push synchronously and independently read back the Gist state."""
+    gist_id = configured_gist_id()
+    if not gist_id or DISABLE_GIST_SYNC:
+        return False, "Chưa cấu hình Gist hoặc đồng bộ đang tắt"
     payload = {"updatedAt": datetime.now().astimezone().isoformat(), "state": state_obj}
     body = {"description": "Atomic Habit & Streak Tracker — Cloud Sync State",
             "files": {"atomic_habits_state.json": {"content": json.dumps(payload, ensure_ascii=False, indent=2)}}}
     try:
         result = subprocess.run(
-            [GH_BIN, "api", "--method", "PATCH", f"/gists/{DEFAULT_GIST_ID}", "--input", "-"],
+            [GH_BIN, "api", "--method", "PATCH", f"/gists/{gist_id}", "--input", "-"],
             input=json.dumps(body).encode("utf-8"), stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, timeout=10)
         if result.returncode != 0:
@@ -87,11 +90,12 @@ def write_state_atomically(path, state):
 
 def pull_gist_state(filename: str = "atomic_habits_state.json"):
     """Pull latest state from GitHub Secret Gist via gh CLI."""
-    if DISABLE_GIST_SYNC:
+    gist_id = configured_gist_id()
+    if DISABLE_GIST_SYNC or not gist_id:
         return None
     try:
         proc = subprocess.run(
-            [GH_BIN, "api", f"/gists/{DEFAULT_GIST_ID}"],
+            [GH_BIN, "api", f"/gists/{gist_id}"],
             capture_output=True,
             text=True,
             timeout=6,
@@ -120,6 +124,9 @@ def push_practice_gist(state_obj: dict):
     """Push Practice state synchronously to its separate Gist file on session completion and verify readback."""
     if DISABLE_GIST_SYNC:
         return False, "Đồng bộ Gist đang tắt trong chế độ thử nghiệm"
+    gist_id = configured_gist_id()
+    if not gist_id:
+        return False, "Chưa cấu hình Gist Practice"
     payload = {"updatedAt": datetime.now().astimezone().isoformat(), "state": state_obj}
     body = {
         "description": "Atomic Habit & Streak Tracker — Cloud Sync State",
@@ -127,7 +134,7 @@ def push_practice_gist(state_obj: dict):
     }
     try:
         result = subprocess.run(
-            [GH_BIN, "api", "--method", "PATCH", f"/gists/{DEFAULT_GIST_ID}", "--input", "-"],
+            [GH_BIN, "api", "--method", "PATCH", f"/gists/{gist_id}", "--input", "-"],
             input=json.dumps(body).encode("utf-8"),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -171,7 +178,6 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
                     "status": "ok",
                     "service": "atomic-habit-tracker",
                     "port": PORT,
-                    "gist_id": DEFAULT_GIST_ID,
                 }
             )
 
