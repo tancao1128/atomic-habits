@@ -431,19 +431,16 @@
         <div class="p-3.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 space-y-2.5">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-indigo-600 dark:text-indigo-300">📱 Cài lên màn hình chính iPhone</span>
-            <button onclick="copyIphoneMagicLink()" class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-600 text-white shadow-sm">
-              Hiện mã QR kết nối
+            <button onclick="copyIphoneLink()" class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-600 text-white shadow-sm">
+              Sao chép link app
             </button>
           </div>
           <ol class="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 list-decimal list-inside leading-relaxed">
-            <li>Bấm <strong>"Hiện mã QR kết nối"</strong> bên trên rồi dùng <strong>Camera iPhone</strong> quét mã để mở trong <strong>Safari</strong> (tự động nạp khoá đồng bộ Cloud).</li>
+            <li>Mở <strong>tancao.org/atomic-habits/</strong> trong Safari trên iPhone.</li>
             <li>Trên Safari iPhone, bấm nút <strong>Chia sẻ (Share ↑)</strong> ở thanh dưới cùng.</li>
             <li>Chọn <strong>"Thêm vào MH chính" (Add to Home Screen)</strong> → <strong>Thêm</strong>. App sẽ chạy full-screen như ứng dụng gốc!</li>
           </ol>
-          <div id="iphone-qr-box" class="hidden pt-2.5 border-t border-indigo-500/20 flex flex-col items-center text-center gap-1.5">
-            <img id="iphone-qr-img" alt="iPhone Pairing QR Code" class="w-36 h-36 rounded-xl bg-white p-2 shadow-md" />
-            <span class="text-[10px] font-mono text-indigo-500 dark:text-indigo-300">Quét bằng Camera iPhone → Mở trong Safari</span>
-          </div>
+          <p class="text-[11px]">Để đồng bộ, nhập khóa GitHub trực tiếp trong cài đặt Cloud trên iPhone. Không gửi khóa qua link.</p>
         </div>
 
         <!-- Cloud Sync Config -->
@@ -455,7 +452,7 @@
           <div class="space-y-1.5">
             <input type="url" id="cloud-endpoint-input" placeholder="https://api.github.com/gists/YOUR_GIST_ID"
               class="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-            <input type="password" id="cloud-apikey-input" placeholder="GitHub Token (Tự động trên Mac / Quét QR trên iPhone)"
+            <input type="password" id="cloud-apikey-input" placeholder="GitHub Token (nhập trực tiếp trên iPhone)"
               class="w-full px-2.5 py-1.5 rounded-lg text-[11px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           </div>
           <div class="flex flex-wrap items-center gap-1.5 pt-1">
@@ -1490,45 +1487,12 @@
       }
     }
 
-    async function copyIphoneMagicLink() {
-      const cfg = getStoredCloudConfig();
-      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint || DEFAULT_GIST_ENDPOINT;
-      let apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
-
-      if (!apiKey && (location.hostname === '127.0.0.1' || location.hostname === 'localhost')) {
-        try {
-          const r = await fetch('/api/pairing');
-          if (r.ok) {
-            const d = await r.json();
-            if (d.token) apiKey = d.token;
-          }
-        } catch (e) {}
-      }
-
-      const publicBaseUrl = 'https://tancao.org/atomic-habits/';
-      const magicUrl = `${publicBaseUrl}#sync_endpoint=${encodeURIComponent(endpoint)}${apiKey ? `&sync_key=${encodeURIComponent(apiKey)}` : ''}`;
-
-      const qrBox = document.getElementById('iphone-qr-box');
-      const qrImg = document.getElementById('iphone-qr-img');
-      if (qrBox && qrImg) {
-        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(magicUrl)}`;
-        qrBox.classList.remove('hidden');
-      }
-
-      navigator.clipboard.writeText(magicUrl).then(() => {
-        showToast('Đã hiện mã QR & sao chép link iPhone!', '📱');
-      }).catch(() => {});
-    }
-
-    function checkMagicLinkPairing() {
-      if (!location.hash || !location.hash.includes('sync_endpoint=')) return;
-      const params = new URLSearchParams(location.hash.slice(1));
-      const endpoint = params.get('sync_endpoint');
-      const apiKey = params.get('sync_key') || '';
-      if (endpoint) {
-        localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
-        history.replaceState(null, '', location.pathname + location.search);
-        showToast('Đã kết nối đồng bộ Cloud trên iPhone!', '⚡');
+    async function copyIphoneLink() {
+      try {
+        await navigator.clipboard.writeText('https://tancao.org/atomic-habits/');
+        showToast('Đã sao chép link app', '📱');
+      } catch (e) {
+        showToast('Mở tancao.org/atomic-habits/ trên iPhone', '📱');
       }
     }
 
@@ -1547,7 +1511,6 @@
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      checkMagicLinkPairing();
       await loadState();
       renderAll();
       const cfg = getStoredCloudConfig();

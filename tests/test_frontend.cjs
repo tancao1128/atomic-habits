@@ -13,6 +13,13 @@ function setup({host='localhost',fetchImpl,failStorage=false}={}) {
   return {ctx,elements,map};
 }
 const response=(value,ok=true)=>({ok,json:async()=>value,status:ok?200:503});
+test('pairing link contains no token and no QR service request',async()=>{
+ let copied='';const {ctx}=setup();
+ ctx.navigator.clipboard={writeText:async value=>{copied=value}};
+ await vm.runInContext('copyIphoneLink()',ctx);
+ assert.equal(copied,'https://tancao.org/atomic-habits/');
+ assert.doesNotMatch(script,/api\.qrserver\.com|\/api\/pairing|sync_key/);
+});
 test('local write failure is visible and never reports success',async()=>{
  let called=false;const {ctx,elements}=setup({failStorage:true,fetchImpl:()=>{called=true}});
  assert.equal(await vm.runInContext('saveState()',ctx),false);assert.match(elements['save-status'].textContent,/未|chưa được lưu/i);assert.equal(called,false);
