@@ -19,6 +19,7 @@ DATA_DIR = BASE_DIR / "data"
 STATE_FILE = DATA_DIR / "habits_state.json"
 CLOUD_META_FILE = DATA_DIR / "cloud_sync.json"
 BACKUP_DIR = DATA_DIR / "backups"
+BASELINE_FILE = DATA_DIR / "sync_baseline.json"
 PORT = int(os.environ.get("ATOMIC_HABIT_PORT", "8765"))
 DEFAULT_GIST_ID = "938d0babf550630ef80c5f709ba21c33"
 GH_BIN = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
@@ -169,6 +170,9 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             parsed = json.loads(self.rfile.read(length).decode("utf-8"))
             state = parsed.get("state", parsed)
+            expected = parsed.get("expected_state")
+            if "expected_state" not in parsed:
+                return self._send_json({"ok": False, "local_saved": False, "error": "Reload required before saving"}, status=409)
             if not isinstance(state, dict) or not isinstance(state.get("habits"), list) or not isinstance(state.get("logs"), dict):
                 return self._send_json({"ok": False, "local_saved": False, "error": "Invalid state payload"}, status=400)
         except (ValueError, AttributeError, UnicodeDecodeError):
@@ -178,7 +182,13 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
             try:
                 ensure_dirs()
                 previous = json.loads(STATE_FILE.read_text(encoding="utf-8")) if STATE_FILE.exists() else None
+                if previous != expected:
+                    return self._send_json({"ok": False, "local_saved": False, "error": "Dữ liệu máy đã thay đổi; cửa sổ này cần đối chiếu"}, status=409)
                 remote = pull_gist_state()
+                baseline = json.loads(BASELINE_FILE.read_text(encoding="utf-8")) if BASELINE_FILE.exists() else None
+                if remote and isinstance(remote.get("state"), dict) and remote["state"] == previous:
+                    baseline = previous
+                    write_state_atomically(BASELINE_FILE, baseline)
                 # Keep a backup of the state before replacing it.
                 if previous is not None:
                     stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
@@ -189,10 +199,17 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
                                         "error": "Không lưu được dữ liệu trên máy"}, status=500)
             if not remote or not isinstance(remote.get("state"), dict):
                 synced, error = False, "Đã lưu trên máy; không đọc được Gist, chưa đồng bộ"
-            elif previous is None or remote["state"] != previous:
+            elif remote["state"] == state:
+                synced, error = True, ""
+            elif baseline is None or remote["state"] != baseline:
                 synced, error = False, "Đã lưu trên máy; dữ liệu Gist khác, chưa đồng bộ"
             else:
                 synced, error = push_gist(state)
+            if synced:
+                try:
+                    write_state_atomically(BASELINE_FILE, state)
+                except OSError:
+                    synced, error = False, "Đã đẩy Gist nhưng không lưu được mốc đồng bộ; cần kiểm tra"
             return self._send_json({"ok": True, "local_saved": True, "cloud_synced": synced,
                                     "cloud_error": error})
 

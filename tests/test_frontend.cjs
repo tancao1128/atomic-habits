@@ -50,14 +50,25 @@ test('mobile cloud push failure is shown',async()=>{
  const old={habits:[{id:'fake'}],logs:{}};
  const {ctx,elements,map}=setup({host:'phone.example',fetchImpl:async(url,opts)=>opts?.method==='GET'?response({files:{'atomic_habits_state.json':{content:JSON.stringify({state:old})}}}):response({},false)});
  map.set('atomic_habit_cloud_config_v1',JSON.stringify({endpoint:'https://api.github.com/gists/fake',apiKey:'fake'}));
- vm.runInContext('cloudReference={habits:[{id:"fake"}],logs:{}}',ctx);
+ vm.runInContext('cloudReference={habits:[{id:"fake"}],logs:{}};appState.logs={today:{fake:true}}',ctx);
  assert.equal(await vm.runInContext('saveState()',ctx),false);assert.match(elements['save-status'].textContent,/Không đẩy được cloud/);
+});
+test('retry recognizes a previously completed cloud write without overwriting',async()=>{
+ let writes=0;const state={habits:[{id:'fake'}],logs:{}};
+ const {ctx,map}=setup({host:'phone.example',fetchImpl:async(url,opts)=>{
+   if(opts.method!=='GET') writes++;
+   return response({files:{'atomic_habits_state.json':{content:JSON.stringify({state})}}});
+ }});
+ map.set('atomic_habit_cloud_config_v1',JSON.stringify({endpoint:'https://api.github.com/gists/fake',apiKey:'fake'}));
+ vm.runInContext('cloudReference={habits:[],logs:{}}',ctx);
+ assert.equal(await vm.runInContext('pushToCloud(true)',ctx),true);
+ assert.equal(writes,0);
 });
 test('failed mobile write remains local and shows unverified status',async()=>{
  const old={habits:[{id:'fake'}],logs:{}};let method=[];
  const {ctx,elements,map}=setup({host:'phone.example',fetchImpl:async(url,opts)=>{method.push(opts.method); if(opts.method==='GET') return response({files:{'atomic_habits_state.json':{content:JSON.stringify({state:old})}}});return response({},false)}});
  map.set('atomic_habit_cloud_config_v1',JSON.stringify({endpoint:'https://api.github.com/gists/fake',apiKey:'fake'}));
- vm.runInContext('cloudReference={habits:[{id:"fake"}],logs:{}}',ctx);
+ vm.runInContext('cloudReference={habits:[{id:"fake"}],logs:{}};appState.logs={today:{fake:true}}',ctx);
  assert.equal(await vm.runInContext('saveState()',ctx),false);assert.ok(map.has('atomic_habit_streak_os_v1'));assert.deepEqual(method,['GET','PATCH']);assert.match(elements['save-status'].textContent,/Lỗi/);
 });
 test('different browser and server versions are preserved and saving is blocked',async()=>{

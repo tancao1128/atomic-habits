@@ -32,15 +32,15 @@ class SaveStateTests(unittest.TestCase):
         self.root=Path(self.tmp.name);self.path=self.root/'state.json';self.backups=self.root/'backups'
         self.old={'habits':[{'id':'fake'}],'logs':{}};self.new={'habits':[{'id':'fake'}],'logs':{'2026-11-01':{'fake':True}}}
         self.path.write_text(json.dumps(self.old));self.before=self.path.read_bytes()
-        for k,v in [('STATE_FILE',self.path),('DATA_DIR',self.root),('BACKUP_DIR',self.backups),('CLOUD_META_FILE',self.root/'meta.json')]:
+        for k,v in [('STATE_FILE',self.path),('DATA_DIR',self.root),('BACKUP_DIR',self.backups),('CLOUD_META_FILE',self.root/'meta.json'),('BASELINE_FILE',self.root/'baseline.json')]:
             patcher=patch.object(srv,k,v);patcher.start();self.addCleanup(patcher.stop)
-    def post(self):
+    def post(self, expected=None):
         from urllib.request import Request
         from urllib.error import HTTPError
         server=srv.ThreadingHTTPServer(('127.0.0.1',0),srv.AtomicHabitHandler)
         t=threading.Thread(target=server.serve_forever,daemon=True);t.start()
         try:
-            req=Request('http://127.0.0.1:%d/api/state'%server.server_port,data=json.dumps({'state':self.new}).encode(),method='POST',headers={'Content-Type':'application/json'})
+            req=Request('http://127.0.0.1:%d/api/state'%server.server_port,data=json.dumps({'state':self.new,'expected_state':self.old if expected is None else expected}).encode(),method='POST',headers={'Content-Type':'application/json'})
             try:
                 with urlopen(req,timeout=5) as r:return r.status,json.load(r)
             except HTTPError as e:return e.code,json.load(e)
@@ -63,6 +63,17 @@ class SaveStateTests(unittest.TestCase):
         with patch.object(srv,'pull_gist_state',return_value={'state':self.old}),patch.object(srv,'push_gist',return_value=(True,'')):
             _,result=self.post()
         self.assertTrue(result['local_saved']);self.assertTrue(result['cloud_synced'])
+    def test_stale_window_cannot_replace_newer_state(self):
+        latest={'habits':[],'logs':{'newer':{}}};self.path.write_text(json.dumps(latest))
+        with patch.object(srv,'pull_gist_state') as read,patch.object(srv,'push_gist') as push:
+            code,result=self.post()
+        self.assertEqual(code,409);self.assertFalse(result['local_saved']);self.assertEqual(json.loads(self.path.read_text()),latest)
+        read.assert_not_called();push.assert_not_called()
+    def test_retry_only_when_cloud_still_matches_saved_baseline(self):
+        with patch.object(srv,'pull_gist_state',return_value={'state':self.old}),patch.object(srv,'push_gist',side_effect=[(False,'offline'),(True,'')]) as push:
+            self.assertFalse(self.post()[1]['cloud_synced'])
+            code,result=self.post(expected=self.new)
+        self.assertEqual(code,200);self.assertTrue(result['cloud_synced']);self.assertEqual(push.call_count,2)
 
 class CloudPushTests(unittest.TestCase):
     def test_push_nonzero_and_readback_failure(self):

@@ -460,7 +460,7 @@
               Lưu
             </button>
             <button onclick="pushToCloud()" class="tap-scale px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-500 text-white">
-              Đẩy lên Cloud
+              Thử đồng bộ lại
             </button>
             <button onclick="pullFromCloud()" class="tap-scale px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-indigo-600 hover:bg-indigo-500 text-white">
               Tải từ Cloud
@@ -605,6 +605,7 @@
     let hadLocalState = false;
     let browserStateConflict = false;
     let cloudReference = null;
+    let localReference = null;
     let saveQueue = Promise.resolve();
     let saveGeneration = 0;
     function setSaveStatus(message) {
@@ -633,6 +634,7 @@
             const data = await res.json();
             if (data && data.exists && data.state && Array.isArray(data.state.habits) && data.state.logs) {
               appState = data.state;
+              localReference = JSON.parse(JSON.stringify(data.state));
               hadLocalState = true;
               try {
                 const prior = localStorage.getItem(STORAGE_KEY);
@@ -694,9 +696,10 @@
       saveQueue = saveQueue.catch(() => {}).then(async () => {
         try {
           if (isLocalServer()) {
-            const response = await fetch('/api/state', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({state:snapshot})});
+            const response = await fetch('/api/state', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({state:snapshot, expected_state:localReference})});
             const result = await response.json();
-            if (!response.ok || !result.local_saved) throw new Error('Không lưu được dữ liệu trên máy');
+            if (!response.ok || !result.local_saved) throw new Error(result.error || 'Không lưu được dữ liệu trên máy');
+            localReference = snapshot;
             if (!result.cloud_synced) throw new Error(result.cloud_error || 'Không đồng bộ được Gist');
           } else {
             await pushToCloud(true, snapshot);
@@ -1425,6 +1428,11 @@
         if (!endpoint || !apiKey) throw new Error('Chưa cấu hình cloud trên thiết bị này');
         if (cloudReference === null) throw new Error('Chưa đối chiếu Gist; chưa đẩy dữ liệu');
         const current = await fetchCloudState(endpoint, apiKey);
+        if (sameState(current, snapshot)) {
+          cloudReference = current;
+          if (!silent) setSaveStatus('Đã xác minh dữ liệu trên Gist');
+          return true;
+        }
         if (!sameState(current, cloudReference)) throw new Error('Dữ liệu Gist đã thay đổi; chưa đẩy dữ liệu');
         const isGist = endpoint.includes('api.github.com/gists/');
         const headers = {'Content-Type':'application/json','Accept':'application/vnd.github+json','Authorization':`Bearer ${apiKey}`};
