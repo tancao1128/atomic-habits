@@ -1448,6 +1448,7 @@
     }
 
     async function pullFromCloud(silent = false) {
+      const pullGeneration = saveGeneration;
       const cfg = getStoredCloudConfig();
       const endpoint = document.getElementById('cloud-endpoint-input')?.value?.trim() || cfg.endpoint;
       const apiKey = document.getElementById('cloud-apikey-input')?.value?.trim() || cfg.apiKey;
@@ -1456,12 +1457,14 @@
           const response = await fetch('/api/state', {cache:'no-store'});
           if (!response.ok) throw new Error('Không đọc được dữ liệu trên máy');
           const data = await response.json();
+          if (pullGeneration !== saveGeneration) return false;
           if (data.cloud_status === 'matches') { setSaveStatus('Dữ liệu máy và Gist khớp'); return true; }
           setSaveStatus(data.cloud_status === 'conflict' ? 'Dữ liệu máy và Gist khác nhau; chưa ghi đè' : 'Không đọc được Gist; chưa xác minh đồng bộ');
           return false;
         }
         if (!endpoint) throw new Error('Chưa cấu hình cloud');
         const remoteState = await fetchCloudState(endpoint, apiKey);
+        if (pullGeneration !== saveGeneration) return false;
         if (hadLocalState && !sameState(remoteState, appState)) {
           cloudReference = null;
           setSaveStatus('Dữ liệu trên thiết bị và Gist khác nhau; chưa ghi đè');
@@ -1479,6 +1482,7 @@
         if (!silent) showToast('Đã kiểm tra cloud', '☁️');
         return true;
       } catch (err) {
+        if (pullGeneration !== saveGeneration) return false;
         cloudReference = null;
         setSaveStatus('Lỗi đọc cloud: ' + err.message);
         if (!silent) showToast('Không đọc được cloud — xem trạng thái', '⚠️');

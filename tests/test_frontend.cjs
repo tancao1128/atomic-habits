@@ -62,3 +62,14 @@ test('different browser and server versions are preserved and saving is blocked'
  assert.equal(map.get('atomic_habit_streak_os_v1'),prior);assert.match(elements['save-status'].textContent,/khác nhau/);
  assert.equal(await vm.runInContext('saveState()',ctx),false);assert.equal(posts,0);assert.equal(map.get('atomic_habit_streak_os_v1'),prior);
 });
+test('an older cloud read cannot hide a newer save failure',async()=>{
+ let resolveRead;
+ const {ctx,elements}=setup({fetchImpl:(url,opts)=>opts?.method==='POST'
+   ? Promise.resolve(response({local_saved:true,cloud_synced:false,cloud_error:'Gist unavailable'}))
+   : new Promise(resolve=>{resolveRead=resolve})});
+ const pending=vm.runInContext('pullFromCloud(true)',ctx);
+ assert.equal(await vm.runInContext('saveState()',ctx),false);
+ resolveRead(response({cloud_status:'matches'}));
+ assert.equal(await pending,false);
+ assert.match(elements['save-status'].textContent,/Gist unavailable/);
+});
