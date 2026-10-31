@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atomic-habits-os-v4';
+const CACHE_NAME = 'atomic-habits-os-v5';
 const ASSETS = [
   './',
   './index.html',
