@@ -144,24 +144,23 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
             )
 
         if self.path.startswith("/api/state"):
-            ensure_dirs()
-            # Pull remote Gist if available so changes made on iPhone over 4G/5G sync to Mac!
+            # Read local and remote independently. A GET never writes local state.
+            try:
+                data = json.loads(STATE_FILE.read_text(encoding="utf-8")) if STATE_FILE.exists() else None
+            except (OSError, ValueError):
+                return self._send_json({"ok": False, "error": "Cannot read local state"}, status=500)
             remote = pull_gist_state()
-            if remote and isinstance(remote.get("state"), dict):
-                remote_state = remote["state"]
-                STATE_FILE.write_text(
-                    json.dumps(remote_state, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
-                )
-                return self._send_json({"ok": True, "exists": True, "state": remote_state, "source": "cloud_gist"})
-
-            if STATE_FILE.exists():
-                try:
-                    data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-                    return self._send_json({"ok": True, "exists": True, "state": data, "source": "local_disk"})
-                except Exception as exc:
-                    return self._send_json({"ok": False, "error": str(exc)}, status=500)
-            return self._send_json({"ok": True, "exists": False, "state": None})
+            if not remote or not isinstance(remote.get("state"), dict):
+                cloud_status = "unavailable"
+            elif data is None:
+                cloud_status = "local_missing"
+            elif remote["state"] == data:
+                cloud_status = "matches"
+            else:
+                cloud_status = "conflict"
+            return self._send_json({"ok": True, "exists": data is not None,
+                                    "state": data, "source": "local_disk",
+                                    "cloud_status": cloud_status})
 
         return super().do_GET()
 
