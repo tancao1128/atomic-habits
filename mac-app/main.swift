@@ -43,16 +43,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         startBackendIfNeeded()
 
-        let rect = NSRect(x: 0, y: 0, width: 1280, height: 840)
+        let rect = NSRect(x: 0, y: 0, width: 520, height: 740)
         window = NSWindow(
             contentRect: rect,
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
+        window.minSize = NSSize(width: 400, height: 560)
         window.center()
-        window.title = "Atomic Habit & Streak Tracker — Identity OS"
-        window.titlebarAppearsTransparent = true
+        window.title = "Atomic Habits"
+        window.titlebarAppearsTransparent = false
+        window.isMovable = true
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.backgroundColor = NSColor(red: 11/255.0, green: 15/255.0, blue: 25/255.0, alpha: 1.0)
