@@ -91,3 +91,58 @@ test('an older cloud read cannot hide a newer save failure',async()=>{
  assert.equal(await pending,false);
  assert.match(elements['save-status'].textContent,/Gist unavailable/);
 });
+test('meditation timer computes elapsed from Date.now(), uses WakeLock, and saves without quality score on finish',async()=>{
+ let practicePosts=[];
+ let wakeRequested=0,wakeReleased=0;
+ const {ctx,elements}=setup({fetchImpl:async(url,opts)=>{
+  if(url==='/api/practice'&&opts?.method==='POST'){
+   practicePosts.push(JSON.parse(opts.body));
+   return response({ok:true,local_saved:true,cloud_synced:true});
+  }
+  throw Error('unexpected fetch '+url);
+ }});
+ ctx.navigator.wakeLock={request:async()=>{wakeRequested++;return {release:async()=>{wakeReleased++;}}}};
+ vm.runInContext("selectedDateKey='2026-10-31';setMeditationPreset('morning', 60);",ctx);
+ await vm.runInContext('startMeditationTimer(1000)',ctx);
+ assert.equal(wakeRequested,1);
+ const after25m = 1000 + 25 * 60 * 1000;
+ assert.equal(vm.runInContext(`getMeditationRemainingSeconds(${after25m})`,ctx), 35 * 60);
+ assert.equal(await vm.runInContext(`finishMeditationSession(${after25m})`,ctx), true);
+ assert.equal(wakeReleased,1);
+ assert.equal(practicePosts.length,1);
+ assert.equal(practicePosts[0].push_cloud,true);
+ const entry=practicePosts[0].state.meditation_sessions[0];
+ assert.equal(entry.session,'morning');
+ assert.equal(entry.planned_minutes,60);
+ assert.equal(entry.actual_minutes,25);
+ assert.equal('quality' in entry,false);
+ const bells=vm.runInContext('meditationState.bellLog.map(b=>b.kind)',ctx);
+ assert.deepEqual(JSON.parse(JSON.stringify(bells)),['start','end']);
+ assert.match(elements['practice-save-status'].textContent,/Gist Practice/);
+});
+test('gym session tracks sets and rest timer via Date.now(), saves to /api/practice, and only checks hab_move_daily on explicit confirm',async()=>{
+ let urlsCalled=[];
+ const {ctx}=setup({fetchImpl:async(url,opts)=>{
+  urlsCalled.push({url,method:opts?.method||'GET',body:opts?.body?JSON.parse(opts.body):null});
+  return response({ok:true,local_saved:true,cloud_synced:true});
+ }});
+ vm.runInContext("renderAll=()=>renderPracticeTab();selectedDateKey='2026-10-31';appState={habits:[{id:'hab_move_daily',name:'Vận động mỗi ngày'}],logs:{}};",ctx);
+ vm.runInContext("selectGymSplit('Push');toggleGymSet('ex_push_1', 1, 90, 5000);",ctx);
+ assert.equal(vm.runInContext('getGymRestRemainingSeconds(5000 + 30000)',ctx),60);
+ assert.equal(await vm.runInContext('finishGymSession(5000 + 600000)',ctx),true);
+ assert.equal(urlsCalled.length,1);
+ assert.equal(urlsCalled[0].url,'/api/practice');
+ assert.equal(urlsCalled[0].body.push_cloud,true);
+ assert.equal(urlsCalled[0].body.state.gym_sessions[0].split,'Push');
+ assert.equal(urlsCalled[0].body.state.gym_sessions[0].exercises[0].completed_sets,1);
+ assert.equal(vm.runInContext("isHabitDone('hab_move_daily','2026-10-31')",ctx),false);
+ assert.equal(vm.runInContext('gymDraft.suggestMoveHabit',ctx),true);
+ vm.runInContext('confirmCheckMoveHabit()',ctx);
+ assert.equal(vm.runInContext("isHabitDone('hab_move_daily','2026-10-31')",ctx),true);
+});
+test('practice save network or cloud failure is clearly reported and never claims cloud success',async()=>{
+ const {ctx,elements}=setup({fetchImpl:async()=>response({ok:true,local_saved:true,cloud_synced:false,cloud_error:'Gist Practice lỗi mạng'})});
+ assert.equal(await vm.runInContext('savePracticeState({pushCloud:true})',ctx),false);
+ assert.match(elements['practice-save-status'].textContent,/Gist Practice lỗi mạng/);
+ assert.match(elements['save-status'].textContent,/Gist Practice lỗi mạng/);
+});

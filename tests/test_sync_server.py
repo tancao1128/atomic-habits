@@ -98,3 +98,97 @@ class SaveUnavailableTests(SaveStateTests):
         with patch.object(srv,'pull_gist_state',return_value=None),patch.object(srv,'push_gist') as push:
             status,result=self.post()
         self.assertEqual(status,200);self.assertTrue(result['local_saved']);self.assertFalse(result['cloud_synced']);push.assert_not_called()
+
+class PracticeStateServerTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name)
+        self.habits_path=self.root/'habits_state.json'
+        self.practice_path=self.root/'practice_state.json'
+        self.plan_path=self.root/'gym_plan_mock.json'
+        self.backups=self.root/'backups'
+        self.habits_orig={'habits':[{'id':'hab_move_daily'}],'logs':{}}
+        self.habits_path.write_text(json.dumps(self.habits_orig))
+        self.habits_bytes=self.habits_path.read_bytes()
+        self.old_practice={'meditation_sessions':[],'gym_sessions':[]}
+        self.new_practice={
+            'meditation_sessions':[{'id':'med_1','date':'2026-10-31','session':'morning','planned_minutes':60,'actual_minutes':45,'completed_at':'2026-10-31T07:15:00Z'}],
+            'gym_sessions':[{'id':'gym_1','date':'2026-10-31','split':'Push','exercises':[],'completed_at':'2026-10-31T17:30:00Z'}]
+        }
+        self.practice_path.write_text(json.dumps(self.old_practice))
+        self.plan_obj={'source':'mock_test','note':'Mock plan file','splits':{'Push':{'label':'Push','exercises':[]}}}
+        self.plan_path.write_text(json.dumps(self.plan_obj))
+        for k,v in [
+            ('STATE_FILE',self.habits_path),
+            ('PRACTICE_FILE',self.practice_path),
+            ('GYM_PLAN_FILE',self.plan_path),
+            ('DATA_DIR',self.root),
+            ('BACKUP_DIR',self.backups),
+            ('CLOUD_META_FILE',self.root/'meta.json'),
+            ('PRACTICE_BASELINE_FILE',self.root/'practice_baseline.json'),
+            ('DISABLE_GIST_SYNC',False),
+        ]:
+            p=patch.object(srv,k,v);p.start();self.addCleanup(p.stop)
+
+    def post_practice(self, state=None, expected=None, push_cloud=True):
+        from urllib.request import Request
+        from urllib.error import HTTPError
+        server=srv.ThreadingHTTPServer(('127.0.0.1',0),srv.AtomicHabitHandler)
+        t=threading.Thread(target=server.serve_forever,daemon=True);t.start()
+        try:
+            payload={
+                'state':self.new_practice if state is None else state,
+                'expected_state':self.old_practice if expected is None else expected,
+                'push_cloud':push_cloud
+            }
+            req=Request('http://127.0.0.1:%d/api/practice'%server.server_port,data=json.dumps(payload).encode(),method='POST',headers={'Content-Type':'application/json'})
+            try:
+                with urlopen(req,timeout=5) as r:return r.status,json.load(r)
+            except HTTPError as e:return e.code,json.load(e)
+        finally:
+            server.shutdown();server.server_close();t.join()
+
+    def test_get_practice_returns_state_and_plan_without_touching_habits(self):
+        with patch.object(srv,'pull_practice_gist_state',return_value={'state':self.old_practice}):
+            server=srv.ThreadingHTTPServer(('127.0.0.1',0),srv.AtomicHabitHandler)
+            t=threading.Thread(target=server.serve_forever,daemon=True);t.start()
+            try:
+                with urlopen('http://127.0.0.1:%d/api/practice'%server.server_port,timeout=3) as r:
+                    data=json.load(r)
+            finally:
+                server.shutdown();server.server_close();t.join()
+        self.assertEqual(data['state'],self.old_practice)
+        self.assertEqual(data['plan'],self.plan_obj)
+        self.assertEqual(data['cloud_status'],'matches')
+        self.assertEqual(self.habits_path.read_bytes(),self.habits_bytes)
+
+    def test_save_practice_without_cloud_push_saves_locally_only(self):
+        with patch.object(srv,'push_practice_gist') as push:
+            code,res=self.post_practice(push_cloud=False)
+        self.assertEqual(code,200)
+        self.assertTrue(res['local_saved'])
+        self.assertFalse(res['cloud_synced'])
+        push.assert_not_called()
+        self.assertEqual(json.loads(self.practice_path.read_text()),self.new_practice)
+        self.assertEqual(self.habits_path.read_bytes(),self.habits_bytes)
+
+    def test_save_practice_on_session_end_pushes_and_reports_cloud_failure(self):
+        with patch.object(srv,'pull_practice_gist_state',return_value={'state':self.old_practice}),patch.object(srv,'push_practice_gist',return_value=(False,'Gist Practice offline')):
+            code,res=self.post_practice(push_cloud=True)
+        self.assertEqual(code,200)
+        self.assertTrue(res['local_saved'])
+        self.assertFalse(res['cloud_synced'])
+        self.assertIn('offline',res['cloud_error'])
+        self.assertEqual(json.loads(self.practice_path.read_text()),self.new_practice)
+        self.assertEqual(self.habits_path.read_bytes(),self.habits_bytes)
+
+    def test_save_practice_stale_expected_returns_409(self):
+        newer={'meditation_sessions':[{'id':'newer'}],'gym_sessions':[]}
+        self.practice_path.write_text(json.dumps(newer))
+        with patch.object(srv,'push_practice_gist') as push:
+            code,res=self.post_practice(push_cloud=True)
+        self.assertEqual(code,409)
+        self.assertFalse(res['local_saved'])
+        self.assertEqual(json.loads(self.practice_path.read_text()),newer)
+        push.assert_not_called()
+

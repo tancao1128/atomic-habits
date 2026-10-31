@@ -14,20 +14,26 @@ from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-BASE_DIR = Path("/Users/tancao/atomic-habit-tracker").resolve()
-DATA_DIR = BASE_DIR / "data"
+BASE_DIR = Path(os.environ.get("ATOMIC_HABIT_BASE_DIR", str(Path(__file__).resolve().parent))).resolve()
+DATA_DIR = Path(os.environ.get("ATOMIC_HABIT_DATA_DIR", str(BASE_DIR / "data"))).resolve()
 STATE_FILE = DATA_DIR / "habits_state.json"
+PRACTICE_FILE = DATA_DIR / "practice_state.json"
+GYM_PLAN_FILE = DATA_DIR / "gym_plan_mock.json"
 CLOUD_META_FILE = DATA_DIR / "cloud_sync.json"
 BACKUP_DIR = DATA_DIR / "backups"
 BASELINE_FILE = DATA_DIR / "sync_baseline.json"
+PRACTICE_BASELINE_FILE = DATA_DIR / "practice_sync_baseline.json"
 PORT = int(os.environ.get("ATOMIC_HABIT_PORT", "8765"))
 DEFAULT_GIST_ID = "938d0babf550630ef80c5f709ba21c33"
+PRACTICE_GIST_FILENAME = "atomic_practice_state.json"
+DISABLE_GIST_SYNC = os.environ.get("ATOMIC_HABIT_DISABLE_GIST", "0") == "1"
 GH_BIN = "/opt/homebrew/bin/gh" if Path("/opt/homebrew/bin/gh").exists() else "gh"
 
 
 def ensure_dirs():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    CLOUD_META_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not CLOUD_META_FILE.exists():
         CLOUD_META_FILE.write_text(
             json.dumps(
@@ -79,8 +85,10 @@ def write_state_atomically(path, state):
             os.unlink(tmp)
 
 
-def pull_gist_state():
+def pull_gist_state(filename: str = "atomic_habits_state.json"):
     """Pull latest state from GitHub Secret Gist via gh CLI."""
+    if DISABLE_GIST_SYNC:
+        return None
     try:
         proc = subprocess.run(
             [GH_BIN, "api", f"/gists/{DEFAULT_GIST_ID}"],
@@ -92,7 +100,7 @@ def pull_gist_state():
             gist_data = json.loads(proc.stdout)
             content = (
                 gist_data.get("files", {})
-                .get("atomic_habits_state.json", {})
+                .get(filename, {})
                 .get("content")
             )
             if content:
@@ -101,6 +109,38 @@ def pull_gist_state():
     except Exception:
         pass
     return None
+
+
+def pull_practice_gist_state():
+    """Pull latest Practice tab state from its separate file in the Gist."""
+    return pull_gist_state(PRACTICE_GIST_FILENAME)
+
+
+def push_practice_gist(state_obj: dict):
+    """Push Practice state synchronously to its separate Gist file on session completion and verify readback."""
+    if DISABLE_GIST_SYNC:
+        return False, "Đồng bộ Gist đang tắt trong chế độ thử nghiệm"
+    payload = {"updatedAt": datetime.now().astimezone().isoformat(), "state": state_obj}
+    body = {
+        "description": "Atomic Habit & Streak Tracker — Cloud Sync State",
+        "files": {PRACTICE_GIST_FILENAME: {"content": json.dumps(payload, ensure_ascii=False, indent=2)}},
+    }
+    try:
+        result = subprocess.run(
+            [GH_BIN, "api", "--method", "PATCH", f"/gists/{DEFAULT_GIST_ID}", "--input", "-"],
+            input=json.dumps(body).encode("utf-8"),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return False, "Không đẩy được Gist Practice"
+        verified = pull_practice_gist_state()
+        if not verified or verified.get("state") != state_obj:
+            return False, "Chưa xác minh được dữ liệu Practice trên Gist"
+        return True, ""
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "Không đẩy được Gist Practice"
 
 
 class AtomicHabitHandler(SimpleHTTPRequestHandler):
@@ -154,13 +194,104 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
                                     "state": data, "source": "local_disk",
                                     "cloud_status": cloud_status})
 
+        if self.path.startswith("/api/practice"):
+            try:
+                data = json.loads(PRACTICE_FILE.read_text(encoding="utf-8")) if PRACTICE_FILE.exists() else None
+                plan = json.loads(GYM_PLAN_FILE.read_text(encoding="utf-8")) if GYM_PLAN_FILE.exists() else None
+            except (OSError, ValueError):
+                return self._send_json({"ok": False, "error": "Cannot read local practice state"}, status=500)
+            remote = pull_practice_gist_state()
+            if not remote or not isinstance(remote.get("state"), dict):
+                cloud_status = "unavailable"
+            elif data is None:
+                cloud_status = "local_missing"
+            elif remote["state"] == data:
+                cloud_status = "matches"
+            else:
+                cloud_status = "conflict"
+            return self._send_json({
+                "ok": True,
+                "exists": data is not None,
+                "state": data,
+                "plan": plan,
+                "source": "local_disk",
+                "cloud_status": cloud_status,
+            })
+
         return super().do_GET()
 
     def do_POST(self):
+        if self.path.startswith("/api/practice"):
+            return self._handle_save_practice()
         self._handle_save_state()
 
     def do_PUT(self):
+        if self.path.startswith("/api/practice"):
+            return self._handle_save_practice()
         self._handle_save_state()
+
+    def _handle_save_practice(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            parsed = json.loads(self.rfile.read(length).decode("utf-8"))
+            state = parsed.get("state", parsed)
+            expected = parsed.get("expected_state")
+            push_cloud = bool(parsed.get("push_cloud", False))
+            if "expected_state" not in parsed:
+                return self._send_json({"ok": False, "local_saved": False, "error": "Reload required before saving practice"}, status=409)
+            if (
+                not isinstance(state, dict)
+                or not isinstance(state.get("meditation_sessions"), list)
+                or not isinstance(state.get("gym_sessions"), list)
+            ):
+                return self._send_json({"ok": False, "local_saved": False, "error": "Invalid practice state payload"}, status=400)
+        except (ValueError, AttributeError, UnicodeDecodeError):
+            return self._send_json({"ok": False, "local_saved": False, "error": "Invalid JSON"}, status=400)
+
+        with SAVE_LOCK:
+            try:
+                ensure_dirs()
+                previous = json.loads(PRACTICE_FILE.read_text(encoding="utf-8")) if PRACTICE_FILE.exists() else None
+                if previous != expected:
+                    return self._send_json(
+                        {"ok": False, "local_saved": False, "error": "Dữ liệu Thực hành trên máy đã thay đổi; cần tải lại trước khi lưu"},
+                        status=409,
+                    )
+                remote = pull_practice_gist_state() if push_cloud else None
+                baseline = json.loads(PRACTICE_BASELINE_FILE.read_text(encoding="utf-8")) if PRACTICE_BASELINE_FILE.exists() else None
+                if push_cloud and remote and isinstance(remote.get("state"), dict) and remote["state"] == previous:
+                    baseline = previous
+                    write_state_atomically(PRACTICE_BASELINE_FILE, baseline)
+                if previous is not None:
+                    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+                    write_state_atomically(BACKUP_DIR / f"practice_before_save_{stamp}.json", previous)
+                write_state_atomically(PRACTICE_FILE, state)
+            except (OSError, ValueError):
+                return self._send_json(
+                    {"ok": False, "local_saved": False, "cloud_synced": False, "error": "Không lưu được dữ liệu Thực hành trên máy"},
+                    status=500,
+                )
+
+            if not push_cloud:
+                return self._send_json({"ok": True, "local_saved": True, "cloud_synced": False, "cloud_skipped": True, "cloud_error": ""})
+
+            if not remote or not isinstance(remote.get("state"), dict):
+                synced, error = False, "Đã lưu buổi tập trên máy; không đọc được Gist Practice, chưa đồng bộ"
+            elif remote["state"] == state:
+                synced, error = True, ""
+            elif baseline is not None and remote["state"] != baseline:
+                synced, error = False, "Đã lưu buổi tập trên máy; dữ liệu Gist Practice khác, chưa đồng bộ"
+            elif previous is not None and baseline is None and remote["state"] != previous:
+                synced, error = False, "Đã lưu buổi tập trên máy; dữ liệu Gist Practice khác, chưa đồng bộ"
+            else:
+                synced, error = push_practice_gist(state)
+
+            if synced:
+                try:
+                    write_state_atomically(PRACTICE_BASELINE_FILE, state)
+                except OSError:
+                    synced, error = False, "Đã đẩy Gist Practice nhưng không lưu được mốc đồng bộ; cần kiểm tra"
+            return self._send_json({"ok": True, "local_saved": True, "cloud_synced": synced, "cloud_error": error})
 
     def _handle_save_state(self):
         if not self.path.startswith("/api/state"):

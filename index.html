@@ -247,14 +247,18 @@
       </div>
 
       <!-- Segmented View Switcher (Works identically on Mac & iPhone) -->
-      <div class="grid grid-cols-2 p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 text-xs font-semibold">
-        <button onclick="switchMainView('daily')" id="tab-btn-daily" class="tap-scale py-1.5 rounded-lg transition bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm flex items-center justify-center gap-1.5">
+      <div class="grid grid-cols-3 p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 text-xs font-semibold">
+        <button onclick="switchMainView('daily')" id="tab-btn-daily" class="tap-scale py-1.5 rounded-lg transition bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm flex items-center justify-center gap-1">
           <span>✓</span>
-          <span>Checklist Hôm Nay</span>
+          <span>Hôm Nay</span>
         </button>
-        <button onclick="switchMainView('matrix')" id="tab-btn-matrix" class="tap-scale py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1.5">
+        <button onclick="switchMainView('matrix')" id="tab-btn-matrix" class="tap-scale py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1">
           <span>▦</span>
           <span>Ma Trận 7 Ngày</span>
+        </button>
+        <button onclick="switchMainView('practice')" id="tab-btn-practice" class="tap-scale py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1">
+          <span>🧘</span>
+          <span>Thực Hành</span>
         </button>
       </div>
     </section>
@@ -333,6 +337,122 @@
         </div>
       </div>
 
+    </section>
+
+    <!-- VIEW 3: PRACTICE TAB (MEDITATION FIRST, GYM SECOND — SEPARATE STATE FILE) -->
+    <section id="panel-practice" class="space-y-3 hidden">
+      <!-- Practice Status & Isolation Banner -->
+      <div class="glass-card rounded-2xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="px-2 py-0.5 rounded-md font-mono font-bold text-[10px] uppercase bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">Practice</span>
+          <span id="practice-save-status" class="text-slate-600 dark:text-slate-300 font-medium truncate">Lưu riêng tại practice_state.json · Đẩy Gist khi kết thúc buổi</span>
+        </div>
+        <span id="practice-session-counts" class="text-[11px] font-mono text-slate-500 dark:text-slate-400">0 buổi thiền · 0 buổi gym</span>
+      </div>
+
+      <!-- PART 1: MEDITATION (THIỀN SÁNG 06:30–07:30 & THIỀN TỐI) -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm space-y-3 border border-indigo-500/20">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-300">🧘 Hành Thiền (Định giờ theo mốc thực)</h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">Ghi nhận ngày, ca và số phút thực tế · Không chấm điểm chất lượng</p>
+          </div>
+          <span id="meditation-wakelock-badge" class="px-2 py-0.5 rounded-md text-[10px] font-mono bg-slate-200/70 dark:bg-white/5 text-slate-500 dark:text-slate-400">WakeLock: chờ</span>
+        </div>
+
+        <!-- Preset Session Selector -->
+        <div class="grid grid-cols-2 gap-2 text-xs font-semibold">
+          <button type="button" id="btn-med-morning" onclick="setMeditationPreset('morning', 60)" class="tap-scale py-2 px-2.5 rounded-xl border border-indigo-500/40 bg-indigo-600 text-white flex items-center justify-between">
+            <span>🌅 Sáng (06:30–07:30)</span>
+            <span class="font-mono text-[11px]">60p</span>
+          </button>
+          <button type="button" id="btn-med-evening" onclick="setMeditationPreset('evening', 30)" class="tap-scale py-2 px-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 flex items-center justify-between">
+            <span>🌙 Tối</span>
+            <span class="font-mono text-[11px]">30p</span>
+          </button>
+        </div>
+
+        <!-- Duration Quick Chips (15 - 60p) -->
+        <div class="flex items-center justify-between gap-1.5">
+          <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Thời lượng:</span>
+          <div class="flex items-center gap-1" id="meditation-duration-chips">
+            <button type="button" onclick="setMeditationPreset(meditationState.session, 15)" data-mins="15" class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-slate-200/70 dark:bg-white/5">15p</button>
+            <button type="button" onclick="setMeditationPreset(meditationState.session, 30)" data-mins="30" class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-slate-200/70 dark:bg-white/5">30p</button>
+            <button type="button" onclick="setMeditationPreset(meditationState.session, 45)" data-mins="45" class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-slate-200/70 dark:bg-white/5">45p</button>
+            <button type="button" onclick="setMeditationPreset(meditationState.session, 60)" data-mins="60" class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-indigo-600 text-white">60p</button>
+          </div>
+        </div>
+
+        <!-- Zen Clock Display -->
+        <div class="rounded-2xl bg-slate-900 text-slate-100 p-4 text-center space-y-2 border border-white/10">
+          <div class="text-[11px] font-mono text-indigo-300" id="meditation-session-label">Ca sáng · Mục tiêu 60 phút</div>
+          <div class="text-4xl font-extrabold font-mono tracking-wider py-1" id="meditation-clock-display">60:00</div>
+          <div class="text-[11px] font-mono text-slate-400" id="meditation-elapsed-label">Đã ngồi: 0 phút · Chuông mở/kết tự động</div>
+          <div class="flex items-center justify-center gap-2 pt-1">
+            <button type="button" id="btn-med-toggle" onclick="toggleMeditationTimer()" class="tap-scale px-4 py-2 rounded-xl text-xs font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-md shadow-indigo-500/25">
+              🔔 Bắt đầu thiền
+            </button>
+            <button type="button" id="btn-med-reset" onclick="resetMeditationTimer()" class="tap-scale px-3 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-slate-200">
+              Đặt lại
+            </button>
+            <button type="button" id="btn-med-finish" onclick="finishMeditationSession()" class="tap-scale px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white">
+              Kết thúc & Lưu buổi
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Meditation Logs -->
+        <div id="meditation-history-list" class="space-y-1 text-xs text-slate-600 dark:text-slate-300"></div>
+      </div>
+
+      <!-- PART 2: GYM (PUSH / PULL / CHÂN + CORE — MOCK PLAN UNTIL GYM COACH PLAN ARRIVES) -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm space-y-3 border border-emerald-500/20">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">🏋️ Lịch Tập Gym (Push / Pull / Chân + Core)</h3>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400" id="gym-plan-source-label">Kế hoạch mẫu giả lập (chờ kế hoạch từ Gym Coach)</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span id="gym-rest-display" class="px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-amber-500/15 text-amber-600 dark:text-amber-300">Nghỉ: sẵn sàng</span>
+            <button type="button" onclick="startGymRestTimer(60)" class="tap-scale px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-slate-200/70 dark:bg-white/10">60s</button>
+            <button type="button" onclick="startGymRestTimer(90)" class="tap-scale px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-slate-200/70 dark:bg-white/10">90s</button>
+          </div>
+        </div>
+
+        <!-- Safety Note -->
+        <div class="rounded-xl px-3 py-1.5 bg-slate-100 dark:bg-white/5 text-[11px] text-slate-600 dark:text-slate-300">
+          ⚠️ An toàn chung: Khởi động kỹ, tăng mức tạ từ từ; dừng ngay bài tập nếu thấy đau bất thường.
+        </div>
+
+        <!-- Split Selector -->
+        <div class="grid grid-cols-3 gap-1.5 text-xs font-semibold" id="gym-split-pills">
+          <button type="button" onclick="selectGymSplit('Push')" data-split="Push" class="tap-scale py-1.5 rounded-xl bg-emerald-600 text-white">Push (Đẩy)</button>
+          <button type="button" onclick="selectGymSplit('Pull')" data-split="Pull" class="tap-scale py-1.5 rounded-xl bg-slate-200/70 dark:bg-white/5 text-slate-700 dark:text-slate-300">Pull (Kéo)</button>
+          <button type="button" onclick="selectGymSplit('LegsCore')" data-split="LegsCore" class="tap-scale py-1.5 rounded-xl bg-slate-200/70 dark:bg-white/5 text-slate-700 dark:text-slate-300">Chân + Core</button>
+        </div>
+
+        <!-- Exercise Cards List -->
+        <div id="gym-exercises-list" class="space-y-2"></div>
+
+        <!-- Finish Gym Session Button -->
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <span class="text-[11px] text-slate-500 dark:text-slate-400" id="gym-progress-summary">Đã tick 0 hiệp</span>
+          <button type="button" id="btn-gym-finish" onclick="finishGymSession()" class="tap-scale px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm">
+            Hoàn tất buổi tập (Lưu & Đẩy Gist)
+          </button>
+        </div>
+
+        <!-- Optional Suggestion to Check Existing Move Habit (Never auto-mutates habits_state.json) -->
+        <div id="practice-move-suggest" class="hidden rounded-xl p-2.5 bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-between gap-2 text-xs">
+          <span class="font-medium text-emerald-900 dark:text-emerald-200">Đã lưu buổi tập! Anh có muốn đánh dấu luôn ô <b>"Vận động mỗi ngày"</b> hôm nay?</span>
+          <button type="button" id="btn-confirm-move-habit" onclick="confirmCheckMoveHabit()" class="tap-scale shrink-0 px-2.5 py-1 rounded-lg font-bold bg-emerald-600 text-white">
+            Tick Vận động
+          </button>
+        </div>
+
+        <!-- Recent Gym Sessions -->
+        <div id="gym-history-list" class="space-y-1 text-xs text-slate-600 dark:text-slate-300"></div>
+      </div>
     </section>
 
   </main>
@@ -853,20 +973,21 @@
       currentMainView = view;
       const dailyPanel = document.getElementById('panel-daily');
       const analyticsPanel = document.getElementById('panel-analytics');
+      const practicePanel = document.getElementById('panel-practice');
       const btnDaily = document.getElementById('tab-btn-daily');
       const btnMatrix = document.getElementById('tab-btn-matrix');
+      const btnPractice = document.getElementById('tab-btn-practice');
 
-      if (view === 'daily') {
-        dailyPanel.classList.remove('hidden');
-        analyticsPanel.classList.add('hidden');
-        btnDaily.className = 'tap-scale py-1.5 rounded-lg transition bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm flex items-center justify-center gap-1.5';
-        btnMatrix.className = 'tap-scale py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1.5';
-      } else {
-        dailyPanel.classList.add('hidden');
-        analyticsPanel.classList.remove('hidden');
-        btnMatrix.className = 'tap-scale py-1.5 rounded-lg transition bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm flex items-center justify-center gap-1.5';
-        btnDaily.className = 'tap-scale py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1.5';
-      }
+      const activeCls = 'tap-scale py-1.5 rounded-lg transition bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 shadow-sm flex items-center justify-center gap-1';
+      const idleCls = 'tap-scale py-1.5 rounded-lg transition text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1';
+
+      if (dailyPanel) dailyPanel.classList.toggle('hidden', view !== 'daily');
+      if (analyticsPanel) analyticsPanel.classList.toggle('hidden', view !== 'matrix');
+      if (practicePanel) practicePanel.classList.toggle('hidden', view !== 'practice');
+
+      if (btnDaily) btnDaily.className = view === 'daily' ? activeCls : idleCls;
+      if (btnMatrix) btnMatrix.className = view === 'matrix' ? activeCls : idleCls;
+      if (btnPractice) btnPractice.className = view === 'practice' ? activeCls : idleCls;
     }
 
     function renderKPIs() {
@@ -1233,6 +1354,520 @@
       renderCategoryFilterPills();
       renderDailyHabits();
       renderWeeklyAnalyticsAndMatrix();
+      renderPracticeTab();
+    }
+
+    // ---------- PRACTICE TAB: MEDITATION & GYM (SEPARATE STATE & GIST ON SESSION END) ----------
+    const PRACTICE_STORAGE_KEY = 'atomic_practice_state_v1';
+
+    const DEFAULT_MOCK_GYM_PLAN = {
+      source: 'mock_plan_v1',
+      note: 'Kế hoạch mẫu giả lập (chờ kế hoạch từ Gym Coach)',
+      splits: {
+        Push: {
+          label: 'Push — Ngực · Vai · Tay sau (Mẫu)',
+          exercises: [
+            { id: 'ex_push_1', name: 'Dumbbell Bench Press (Giả lập)', sets: 3, reps: '10', load: '16kg mẫu', restSec: 60 },
+            { id: 'ex_push_2', name: 'Seated Overhead Shoulder Press (Giả lập)', sets: 3, reps: '10', load: '12kg mẫu', restSec: 60 },
+            { id: 'ex_push_3', name: 'Cable Triceps Pushdown (Giả lập)', sets: 3, reps: '12', load: '15kg mẫu', restSec: 60 }
+          ]
+        },
+        Pull: {
+          label: 'Pull — Lưng · Xô · Tay trước (Mẫu)',
+          exercises: [
+            { id: 'ex_pull_1', name: 'Lat Pulldown (Giả lập)', sets: 3, reps: '10', load: '35kg mẫu', restSec: 60 },
+            { id: 'ex_pull_2', name: 'Seated Cable Row (Giả lập)', sets: 3, reps: '10', load: '30kg mẫu', restSec: 60 },
+            { id: 'ex_pull_3', name: 'Face Pull & Dumbbell Curl (Giả lập)', sets: 3, reps: '12', load: '10kg mẫu', restSec: 60 }
+          ]
+        },
+        LegsCore: {
+          label: 'Chân + Core — Đùi · Mông · Bụng (Mẫu)',
+          exercises: [
+            { id: 'ex_legs_1', name: 'Goblet Squat (Giả lập)', sets: 3, reps: '10', load: '16kg mẫu', restSec: 90 },
+            { id: 'ex_legs_2', name: 'Romanian Deadlift (Giả lập)', sets: 3, reps: '10', load: '20kg mẫu', restSec: 90 },
+            { id: 'ex_legs_3', name: 'Plank & Deadbug Core (Giả lập)', sets: 3, reps: '45s', load: 'Bodyweight', restSec: 60 }
+          ]
+        }
+      }
+    };
+
+    let practiceState = {
+      meditation_sessions: [],
+      gym_sessions: []
+    };
+    let practicePlan = DEFAULT_MOCK_GYM_PLAN;
+    let practiceLocalReference = null;
+    let practiceBrowserConflict = false;
+    let practiceSaveQueue = Promise.resolve();
+    let practiceSaveGeneration = 0;
+
+    let meditationState = {
+      session: 'morning',
+      plannedMinutes: 60,
+      running: false,
+      startedAtMs: null,
+      targetEndMs: null,
+      accumulatedMs: 0,
+      intervalId: null,
+      wakeLock: null,
+      bellLog: []
+    };
+
+    let gymDraft = {
+      split: 'Push',
+      completedSets: {},
+      restRunning: false,
+      restStartedAtMs: null,
+      restTargetEndMs: null,
+      restDurationSec: 60,
+      restIntervalId: null,
+      suggestMoveHabit: false
+    };
+
+    function setPracticeSaveStatus(message) {
+      const el = document.getElementById('practice-save-status');
+      if (el) el.textContent = message;
+      setSaveStatus(message);
+    }
+
+    async function loadPracticeState() {
+      if (location.protocol.startsWith('http')) {
+        try {
+          const res = await fetch('/api/practice', { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.plan && data.plan.splits) {
+              practicePlan = data.plan;
+            }
+            if (data && data.exists && data.state && Array.isArray(data.state.meditation_sessions) && Array.isArray(data.state.gym_sessions)) {
+              practiceState = data.state;
+              practiceLocalReference = JSON.parse(JSON.stringify(data.state));
+              try {
+                const prior = localStorage.getItem(PRACTICE_STORAGE_KEY);
+                if (prior && !sameState(JSON.parse(prior), data.state)) {
+                  practiceBrowserConflict = true;
+                  setPracticeSaveStatus('Bản Thực hành trên trình duyệt và máy khác nhau; tạm dừng lưu');
+                } else {
+                  localStorage.setItem(PRACTICE_STORAGE_KEY, JSON.stringify(practiceState));
+                }
+              } catch (e) {
+                practiceBrowserConflict = true;
+                setPracticeSaveStatus('Không kiểm tra được bộ nhớ Thực hành trên trình duyệt; tạm dừng lưu');
+              }
+              renderPracticeTab();
+              return;
+            }
+          }
+        } catch (e) {}
+      }
+      try {
+        const raw = localStorage.getItem(PRACTICE_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.meditation_sessions) && Array.isArray(parsed.gym_sessions)) {
+            practiceState = parsed;
+          }
+        }
+      } catch (e) {}
+      renderPracticeTab();
+    }
+
+    function savePracticeState({ pushCloud = false } = {}) {
+      if (practiceBrowserConflict) {
+        setPracticeSaveStatus('Bản Thực hành trên trình duyệt và máy khác nhau; chưa lưu thay đổi');
+        showToast('Chưa lưu Thực hành: cần đối chiếu dữ liệu trước', '⚠️');
+        return Promise.resolve(false);
+      }
+      const snapshot = JSON.parse(JSON.stringify(practiceState));
+      const generation = ++practiceSaveGeneration;
+      try {
+        localStorage.setItem(PRACTICE_STORAGE_KEY, JSON.stringify(snapshot));
+      } catch (e) {
+        setPracticeSaveStatus('Lỗi lưu Thực hành trên trình duyệt; thay đổi chưa được lưu');
+        showToast('Không lưu được Thực hành trên trình duyệt', '⚠️');
+        return Promise.resolve(false);
+      }
+      setPracticeSaveStatus(pushCloud ? 'Đã lưu trình duyệt; đang lưu máy & đẩy Gist Practice…' : 'Đã lưu tạm trên trình duyệt…');
+      practiceSaveQueue = practiceSaveQueue.catch(() => {}).then(async () => {
+        try {
+          if (isLocalServer()) {
+            const response = await fetch('/api/practice', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ state: snapshot, expected_state: practiceLocalReference, push_cloud: pushCloud })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.local_saved) {
+              throw new Error(result.error || 'Không lưu được dữ liệu Thực hành trên máy');
+            }
+            practiceLocalReference = snapshot;
+            if (pushCloud && !result.cloud_synced) {
+              throw new Error(result.cloud_error || 'Không đồng bộ được Gist Practice');
+            }
+          }
+          if (generation === practiceSaveGeneration) {
+            setPracticeSaveStatus(pushCloud ? 'Đã lưu buổi tập và xác minh trên Gist Practice' : 'Đã lưu Thực hành trên máy');
+          }
+          return true;
+        } catch (err) {
+          if (generation === practiceSaveGeneration) {
+            setPracticeSaveStatus('Lỗi lưu Thực hành: ' + err.message);
+          }
+          showToast('Lưu/đồng bộ Thực hành chưa thành công', '⚠️');
+          return false;
+        }
+      });
+      return practiceSaveQueue;
+    }
+
+    function playMeditationBell(kind) {
+      meditationState.bellLog.push({ kind, at: Date.now() });
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(kind === 'end' ? 528 : 432, ctx.currentTime);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 1.4);
+      } catch (e) {}
+    }
+
+    async function requestMeditationWakeLock() {
+      const badge = document.getElementById('meditation-wakelock-badge');
+      try {
+        if (navigator.wakeLock && typeof navigator.wakeLock.request === 'function') {
+          meditationState.wakeLock = await navigator.wakeLock.request('screen');
+          if (badge) badge.textContent = 'WakeLock: đang giữ màn hình';
+          return true;
+        }
+      } catch (e) {}
+      if (badge) badge.textContent = 'WakeLock: dùng mốc Date.now()';
+      return false;
+    }
+
+    async function releaseMeditationWakeLock() {
+      const badge = document.getElementById('meditation-wakelock-badge');
+      try {
+        if (meditationState.wakeLock && typeof meditationState.wakeLock.release === 'function') {
+          await meditationState.wakeLock.release();
+        }
+      } catch (e) {}
+      meditationState.wakeLock = null;
+      if (badge) badge.textContent = 'WakeLock: chờ';
+    }
+
+    function getMeditationElapsedMs(nowMs = Date.now()) {
+      const active = meditationState.running && meditationState.startedAtMs !== null
+        ? Math.max(0, nowMs - meditationState.startedAtMs)
+        : 0;
+      return meditationState.accumulatedMs + active;
+    }
+
+    function getMeditationRemainingSeconds(nowMs = Date.now()) {
+      const totalMs = meditationState.plannedMinutes * 60 * 1000;
+      const remMs = Math.max(0, totalMs - getMeditationElapsedMs(nowMs));
+      return Math.ceil(remMs / 1000);
+    }
+
+    function formatClockMMSS(totalSeconds) {
+      const s = Math.max(0, Math.floor(totalSeconds));
+      const mins = Math.floor(s / 60);
+      const secs = s % 60;
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function setMeditationPreset(session, minutes) {
+      if (meditationState.running) pauseMeditationTimer();
+      meditationState.session = session === 'evening' ? 'evening' : 'morning';
+      meditationState.plannedMinutes = Number(minutes) || 60;
+      meditationState.accumulatedMs = 0;
+      meditationState.startedAtMs = null;
+      meditationState.targetEndMs = null;
+      renderPracticeTab();
+    }
+
+    async function startMeditationTimer(nowMs = Date.now()) {
+      if (meditationState.running) return;
+      if (meditationState.accumulatedMs === 0) {
+        playMeditationBell('start');
+      }
+      meditationState.running = true;
+      meditationState.startedAtMs = nowMs;
+      meditationState.targetEndMs = nowMs + (meditationState.plannedMinutes * 60 * 1000 - meditationState.accumulatedMs);
+      await requestMeditationWakeLock();
+      if (meditationState.intervalId && typeof clearInterval === 'function') clearInterval(meditationState.intervalId);
+      if (typeof setInterval === 'function') {
+        meditationState.intervalId = setInterval(() => {
+          if (getMeditationRemainingSeconds(Date.now()) <= 0) {
+            finishMeditationSession(Date.now());
+          } else {
+            renderPracticeTab();
+          }
+        }, 1000);
+      }
+      renderPracticeTab();
+    }
+
+    async function pauseMeditationTimer(nowMs = Date.now()) {
+      if (!meditationState.running) return;
+      meditationState.accumulatedMs = getMeditationElapsedMs(nowMs);
+      meditationState.running = false;
+      meditationState.startedAtMs = null;
+      meditationState.targetEndMs = null;
+      if (meditationState.intervalId) {
+        if (typeof clearInterval === 'function') clearInterval(meditationState.intervalId);
+        meditationState.intervalId = null;
+      }
+      await releaseMeditationWakeLock();
+      renderPracticeTab();
+    }
+
+    function toggleMeditationTimer(nowMs = Date.now()) {
+      if (meditationState.running) return pauseMeditationTimer(nowMs);
+      return startMeditationTimer(nowMs);
+    }
+
+    async function resetMeditationTimer() {
+      await pauseMeditationTimer();
+      meditationState.accumulatedMs = 0;
+      renderPracticeTab();
+    }
+
+    async function finishMeditationSession(nowMs = Date.now()) {
+      const elapsedMs = getMeditationElapsedMs(nowMs);
+      await pauseMeditationTimer(nowMs);
+      playMeditationBell('end');
+      const actualMinutes = elapsedMs > 0
+        ? Math.max(1, Math.round(elapsedMs / 60000))
+        : meditationState.plannedMinutes;
+      const entry = {
+        id: `med_${nowMs}`,
+        date: selectedDateKey,
+        session: meditationState.session,
+        planned_minutes: meditationState.plannedMinutes,
+        actual_minutes: actualMinutes,
+        completed_at: new Date(nowMs).toISOString()
+      };
+      practiceState.meditation_sessions.unshift(entry);
+      meditationState.accumulatedMs = 0;
+      renderPracticeTab();
+      return savePracticeState({ pushCloud: true });
+    }
+
+    function selectGymSplit(split) {
+      if (!['Push', 'Pull', 'LegsCore'].includes(split)) return;
+      gymDraft.split = split;
+      renderPracticeTab();
+    }
+
+    function startGymRestTimer(seconds = 60, nowMs = Date.now()) {
+      gymDraft.restDurationSec = Number(seconds) || 60;
+      gymDraft.restStartedAtMs = nowMs;
+      gymDraft.restTargetEndMs = nowMs + gymDraft.restDurationSec * 1000;
+      gymDraft.restRunning = true;
+      if (gymDraft.restIntervalId && typeof clearInterval === 'function') clearInterval(gymDraft.restIntervalId);
+      if (typeof setInterval === 'function') {
+        gymDraft.restIntervalId = setInterval(() => {
+          if (getGymRestRemainingSeconds(Date.now()) <= 0) {
+            gymDraft.restRunning = false;
+            if (typeof clearInterval === 'function') clearInterval(gymDraft.restIntervalId);
+            gymDraft.restIntervalId = null;
+          }
+          renderPracticeTab();
+        }, 1000);
+      }
+      renderPracticeTab();
+    }
+
+    function getGymRestRemainingSeconds(nowMs = Date.now()) {
+      if (!gymDraft.restRunning || !gymDraft.restTargetEndMs) return 0;
+      return Math.max(0, Math.ceil((gymDraft.restTargetEndMs - nowMs) / 1000));
+    }
+
+    function toggleGymSet(exerciseId, setIndex, restSec = 60, nowMs = Date.now()) {
+      const key = `${gymDraft.split}:${exerciseId}:${setIndex}`;
+      gymDraft.completedSets[key] = !gymDraft.completedSets[key];
+      if (gymDraft.completedSets[key]) {
+        startGymRestTimer(restSec, nowMs);
+      } else {
+        delete gymDraft.completedSets[key];
+        renderPracticeTab();
+      }
+    }
+
+    async function finishGymSession(nowMs = Date.now()) {
+      const splitCfg = (practicePlan.splits && practicePlan.splits[gymDraft.split]) || DEFAULT_MOCK_GYM_PLAN.splits.Push;
+      const exercises = (splitCfg.exercises || []).map(ex => {
+        let doneSets = 0;
+        for (let i = 1; i <= ex.sets; i++) {
+          if (gymDraft.completedSets[`${gymDraft.split}:${ex.id}:${i}`]) doneSets++;
+        }
+        return {
+          id: ex.id,
+          name: ex.name,
+          planned_sets: ex.sets,
+          completed_sets: doneSets,
+          reps: ex.reps,
+          load: ex.load
+        };
+      });
+      const entry = {
+        id: `gym_${nowMs}`,
+        date: selectedDateKey,
+        split: gymDraft.split,
+        exercises,
+        completed_at: new Date(nowMs).toISOString()
+      };
+      practiceState.gym_sessions.unshift(entry);
+      gymDraft.completedSets = {};
+      gymDraft.suggestMoveHabit = !isHabitDone('hab_move_daily', selectedDateKey);
+      renderPracticeTab();
+      return savePracticeState({ pushCloud: true });
+    }
+
+    function confirmCheckMoveHabit() {
+      gymDraft.suggestMoveHabit = false;
+      if (!isHabitDone('hab_move_daily', selectedDateKey)) {
+        toggleHabitCompletion('hab_move_daily', selectedDateKey);
+      } else {
+        renderAll();
+      }
+    }
+
+    function renderPracticeTab() {
+      const countsEl = document.getElementById('practice-session-counts');
+      if (countsEl) {
+        countsEl.textContent = `${practiceState.meditation_sessions.length} buổi thiền · ${practiceState.gym_sessions.length} buổi gym`;
+      }
+
+      // Meditation UI
+      const btnMorning = document.getElementById('btn-med-morning');
+      const btnEvening = document.getElementById('btn-med-evening');
+      if (btnMorning && btnEvening) {
+        const activeSessionCls = 'tap-scale py-2 px-2.5 rounded-xl border border-indigo-500/40 bg-indigo-600 text-white flex items-center justify-between';
+        const idleSessionCls = 'tap-scale py-2 px-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 flex items-center justify-between';
+        btnMorning.className = meditationState.session === 'morning' ? activeSessionCls : idleSessionCls;
+        btnEvening.className = meditationState.session === 'evening' ? activeSessionCls : idleSessionCls;
+      }
+
+      const chipContainer = document.getElementById('meditation-duration-chips');
+      if (chipContainer && chipContainer.querySelectorAll) {
+        chipContainer.querySelectorAll('button').forEach(btn => {
+          const m = Number(btn.getAttribute('data-mins'));
+          btn.className = m === meditationState.plannedMinutes
+            ? 'tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-indigo-600 text-white'
+            : 'tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-slate-200/70 dark:bg-white/5 text-slate-700 dark:text-slate-300';
+        });
+      }
+
+      const remSec = getMeditationRemainingSeconds();
+      const elapsedMin = Math.floor(getMeditationElapsedMs() / 60000);
+      const clockEl = document.getElementById('meditation-clock-display');
+      if (clockEl) clockEl.textContent = formatClockMMSS(remSec);
+      const sessionLabelEl = document.getElementById('meditation-session-label');
+      if (sessionLabelEl) {
+        sessionLabelEl.textContent = `${meditationState.session === 'morning' ? 'Ca sáng (06:30–07:30)' : 'Ca tối'} · Mục tiêu ${meditationState.plannedMinutes} phút`;
+      }
+      const elapsedEl = document.getElementById('meditation-elapsed-label');
+      if (elapsedEl) {
+        elapsedEl.textContent = `Đã ngồi: ${elapsedMin} phút · Chuông mở/kết tự động`;
+      }
+      const toggleBtn = document.getElementById('btn-med-toggle');
+      if (toggleBtn) {
+        toggleBtn.textContent = meditationState.running ? '⏸ Tạm dừng' : '🔔 Bắt đầu thiền';
+      }
+
+      const medHistEl = document.getElementById('meditation-history-list');
+      if (medHistEl) {
+        const recentMed = practiceState.meditation_sessions.slice(0, 3);
+        medHistEl.innerHTML = recentMed.map(s => `
+          <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-100/80 dark:bg-white/5">
+            <span>${s.date} · ${s.session === 'morning' ? '🌅 Sáng' : '🌙 Tối'}</span>
+            <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-300">${s.actual_minutes} phút thực tế</span>
+          </div>
+        `).join('');
+      }
+
+      // Gym UI
+      const planNoteEl = document.getElementById('gym-plan-source-label');
+      if (planNoteEl && practicePlan.note) {
+        planNoteEl.textContent = practicePlan.note;
+      }
+
+      const splitPills = document.getElementById('gym-split-pills');
+      if (splitPills && splitPills.querySelectorAll) {
+        splitPills.querySelectorAll('button').forEach(btn => {
+          const sp = btn.getAttribute('data-split');
+          btn.className = sp === gymDraft.split
+            ? 'tap-scale py-1.5 rounded-xl bg-emerald-600 text-white'
+            : 'tap-scale py-1.5 rounded-xl bg-slate-200/70 dark:bg-white/5 text-slate-700 dark:text-slate-300';
+        });
+      }
+
+      const restEl = document.getElementById('gym-rest-display');
+      if (restEl) {
+        const restRem = getGymRestRemainingSeconds();
+        restEl.textContent = restRem > 0 ? `Nghỉ: ${formatClockMMSS(restRem)}` : 'Nghỉ: sẵn sàng';
+      }
+
+      const splitCfg = (practicePlan.splits && practicePlan.splits[gymDraft.split]) || DEFAULT_MOCK_GYM_PLAN.splits.Push;
+      const exContainer = document.getElementById('gym-exercises-list');
+      let checkedSetCount = 0;
+      if (exContainer) {
+        exContainer.innerHTML = (splitCfg.exercises || []).map(ex => {
+          const setBtns = [];
+          for (let i = 1; i <= ex.sets; i++) {
+            const done = Boolean(gymDraft.completedSets[`${gymDraft.split}:${ex.id}:${i}`]);
+            if (done) checkedSetCount++;
+            setBtns.push(`
+              <button type="button" onclick="toggleGymSet('${ex.id}', ${i}, ${ex.restSec || 60})"
+                class="tap-scale px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition ${
+                  done ? 'bg-emerald-600 text-white' : 'bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                }">
+                H${i}${done ? ' ✓' : ''}
+              </button>
+            `);
+          }
+          return `
+            <div class="rounded-xl p-2.5 bg-slate-100/70 dark:bg-white/5 flex flex-wrap items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-xs font-bold truncate">${ex.name}</div>
+                <div class="text-[11px] font-mono text-slate-500 dark:text-slate-400">${ex.sets} hiệp × ${ex.reps} · ${ex.load}</div>
+              </div>
+              <div class="flex items-center gap-1">${setBtns.join('')}</div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const progEl = document.getElementById('gym-progress-summary');
+      if (progEl) progEl.textContent = `Đã tick ${checkedSetCount} hiệp (${splitCfg.label})`;
+
+      const suggestEl = document.getElementById('practice-move-suggest');
+      if (suggestEl) {
+        suggestEl.classList.toggle('hidden', !gymDraft.suggestMoveHabit || isHabitDone('hab_move_daily', selectedDateKey));
+      }
+
+      const gymHistEl = document.getElementById('gym-history-list');
+      if (gymHistEl) {
+        const recentGym = practiceState.gym_sessions.slice(0, 3);
+        gymHistEl.innerHTML = recentGym.map(s => {
+          const totalDone = (s.exercises || []).reduce((acc, e) => acc + (e.completed_sets || 0), 0);
+          return `
+            <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-100/80 dark:bg-white/5">
+              <span>${s.date} · 🏋️ ${s.split}</span>
+              <span class="font-mono font-semibold text-emerald-600 dark:text-emerald-400">${totalDone} hiệp hoàn thành</span>
+            </div>
+          `;
+        }).join('');
+      }
     }
 
     function openHabitModal(habitId = null) {
@@ -1520,6 +2155,7 @@
 
     window.addEventListener('DOMContentLoaded', async () => {
       await loadState();
+      await loadPracticeState();
       renderAll();
       const cfg = getStoredCloudConfig();
       if (cfg.endpoint && !isLocalServer()) {
