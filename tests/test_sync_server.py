@@ -74,3 +74,16 @@ class CloudPushTests(unittest.TestCase):
             self.assertFalse(srv.push_gist(state)[0])
         with patch.object(srv.subprocess,'run',return_value=SimpleNamespace(returncode=0)),patch.object(srv,'pull_gist_state',return_value={'state':state}):
             self.assertTrue(srv.push_gist(state)[0])
+
+class CloudFailureTests(unittest.TestCase):
+    def test_timeouts_are_reported_without_exception(self):
+        from subprocess import TimeoutExpired
+        with patch.object(srv.subprocess,'run',side_effect=TimeoutExpired('gh',10)):
+            result,error=srv.push_gist({'habits':[],'logs':{}})
+        self.assertFalse(result);self.assertTrue(error)
+
+class SaveUnavailableTests(SaveStateTests):
+    def test_cloud_unavailable_does_not_push(self):
+        with patch.object(srv,'pull_gist_state',return_value=None),patch.object(srv,'push_gist') as push:
+            status,result=self.post()
+        self.assertEqual(status,200);self.assertTrue(result['local_saved']);self.assertFalse(result['cloud_synced']);push.assert_not_called()

@@ -162,6 +162,7 @@
       </div>
     </div>
   </header>
+  <div id="save-status" role="status" aria-live="polite" style="padding: 6px 16px; font-size: 12px; background: #fef3c7; color: #78350f;">Trạng thái lưu: chưa kiểm tra</div>
 
   <!-- Compact Single-Column Main Container -->
   <main class="max-w-xl mx-auto px-3.5 pt-3 space-y-3">
@@ -449,7 +450,7 @@
         <div class="p-3.5 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/70 dark:border-white/10 space-y-2.5">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Cloud Sync (GitHub Gist)</span>
-            <span id="sync-status-badge" class="text-[10px] font-mono text-emerald-500">Auto-Sync</span>
+            <span id="sync-status-badge" class="text-[10px] font-mono">Chưa kiểm tra</span>
           </div>
           <div class="space-y-1.5">
             <input type="url" id="cloud-endpoint-input" placeholder="https://api.github.com/gists/YOUR_GIST_ID"
@@ -604,6 +605,29 @@
       };
     }
 
+    let hadLocalState = false;
+    let browserStateConflict = false;
+    let cloudReference = null;
+    let saveQueue = Promise.resolve();
+    let saveGeneration = 0;
+    function setSaveStatus(message) {
+      const banner = document.getElementById('save-status');
+      const badge = document.getElementById('sync-status-badge');
+      if (banner) banner.textContent = message;
+      if (badge) badge.textContent = message;
+    }
+    function sameState(a, b) {
+      function canonical(x) {
+        if (Array.isArray(x)) return x.map(canonical);
+        if (x && typeof x === 'object') return Object.fromEntries(Object.keys(x).sort().map(k => [k, canonical(x[k])]));
+        return x;
+      }
+      return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+    }
+    function isLocalServer() {
+      return location.protocol.startsWith('http') && (location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname.startsWith('192.168.'));
+    }
+
     async function loadState() {
       if (location.protocol.startsWith('http')) {
         try {
@@ -612,7 +636,22 @@
             const data = await res.json();
             if (data && data.exists && data.state && Array.isArray(data.state.habits) && data.state.logs) {
               appState = data.state;
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+              hadLocalState = true;
+              try {
+                const prior = localStorage.getItem(STORAGE_KEY);
+                if (prior && !sameState(JSON.parse(prior), data.state)) {
+                  browserStateConflict = true;
+                  setSaveStatus('Bản trình duyệt và máy khác nhau; tạm dừng lưu để tránh ghi đè');
+                } else {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+                  if (data.cloud_status === 'conflict') setSaveStatus('Dữ liệu máy và Gist khác nhau; chưa đồng bộ');
+                  else if (data.cloud_status !== 'matches') setSaveStatus('Không đọc được Gist; chưa xác minh đồng bộ');
+                  else setSaveStatus('Dữ liệu máy và Gist khớp');
+                }
+              } catch (e) {
+                browserStateConflict = true;
+                setSaveStatus('Không kiểm tra được bản trình duyệt; tạm dừng lưu');
+              }
               renderAll();
               return;
             }
@@ -626,7 +665,8 @@
           const parsed = JSON.parse(raw);
           if (parsed && Array.isArray(parsed.habits) && parsed.logs) {
             appState = parsed;
-            saveState();
+            hadLocalState = true;
+            setSaveStatus('Đã đọc bản lưu trình duyệt; chưa xác minh Gist');
             return;
           }
         }
@@ -634,32 +674,45 @@
         console.warn('Failed to parse localStorage, using seed data:', e);
       }
       appState = createDefaultSeedData();
-      saveState();
+      setSaveStatus('Chưa có bản lưu; chưa ghi dữ liệu mới');
     }
 
-    let cloudPushTimer = null;
     function saveState() {
+      if (browserStateConflict) {
+        setSaveStatus('Bản trình duyệt và máy chưa được đối chiếu; chưa lưu thay đổi');
+        showToast('Chưa lưu: cần đối chiếu dữ liệu trước', '⚠️');
+        return Promise.resolve(false);
+      }
+      const snapshot = JSON.parse(JSON.stringify(appState));
+      const generation = ++saveGeneration;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+        hadLocalState = true;
       } catch (e) {
-        console.error('Failed to save state to localStorage:', e);
+        setSaveStatus('Lỗi lưu trên trình duyệt; thay đổi chưa được lưu');
+        showToast('Không lưu được dữ liệu trên trình duyệt', '⚠️');
+        return Promise.resolve(false);
       }
-
-      if (location.protocol.startsWith('http') && (location.hostname === '127.0.0.1' || location.hostname === 'localhost' || location.hostname.startsWith('192.168.'))) {
-        fetch('/api/state', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state: appState })
-        }).catch(() => {});
-      }
-
-      const cfg = getStoredCloudConfig();
-      if (cfg && cfg.endpoint) {
-        if (cloudPushTimer) clearTimeout(cloudPushTimer);
-        cloudPushTimer = setTimeout(() => {
-          pushToCloud(true);
-        }, 800);
-      }
+      setSaveStatus('Đã lưu trình duyệt; đang kiểm tra đồng bộ…');
+      saveQueue = saveQueue.catch(() => {}).then(async () => {
+        try {
+          if (isLocalServer()) {
+            const response = await fetch('/api/state', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({state:snapshot})});
+            const result = await response.json();
+            if (!response.ok || !result.local_saved) throw new Error('Không lưu được dữ liệu trên máy');
+            if (!result.cloud_synced) throw new Error(result.cloud_error || 'Không đồng bộ được Gist');
+          } else {
+            await pushToCloud(true, snapshot);
+          }
+          if (generation === saveGeneration) setSaveStatus('Đã lưu và xác minh trên Gist');
+          return true;
+        } catch (err) {
+          if (generation === saveGeneration) setSaveStatus('Lỗi: ' + err.message + '; kiểm tra trước khi đóng app');
+          showToast('Lưu/đồng bộ chưa thành công — xem trạng thái', '⚠️');
+          return false;
+        }
+      });
+      return saveQueue;
     }
 
     const DEFAULT_HABIT_START_DATES = {
@@ -793,7 +846,7 @@
       });
       saveState();
       renderAll();
-      showToast(allAlreadyDone ? 'Đã bỏ chọn' : 'Đã hoàn thành tất cả hôm nay!', '⚡');
+      // Completion is displayed immediately; persistence status is shown separately.
     }
 
     function switchMainView(view) {
@@ -1238,7 +1291,7 @@
         if (idx !== -1) {
           appState.habits[idx] = { ...appState.habits[idx], name, identity, category, target };
         }
-        showToast('Đã cập nhật thói quen', '✅');
+
       } else {
         const newHabit = {
           id: 'hab_' + Date.now().toString(36),
@@ -1249,7 +1302,7 @@
           start_date: todayKey
         };
         appState.habits.push(newHabit);
-        showToast('Đã thêm thói quen mới!', '🚀');
+
       }
 
       saveState();
@@ -1264,7 +1317,7 @@
       saveState();
       closeHabitModal();
       renderAll();
-      showToast('Đã xoá thói quen', '🗑️');
+
     }
 
     function openDataModal() {
@@ -1272,7 +1325,7 @@
       const cfg = getStoredCloudConfig();
       document.getElementById('cloud-endpoint-input').value = cfg.endpoint || '';
       document.getElementById('cloud-apikey-input').value = cfg.apiKey || '';
-      document.getElementById('sync-status-badge').textContent = cfg.endpoint ? 'Auto-Sync ✓' : 'Not Configured';
+      document.getElementById('sync-status-badge').textContent = document.getElementById('save-status').textContent;
       modal.classList.remove('hidden');
       modal.classList.add('flex');
     }
@@ -1315,7 +1368,7 @@
             saveState();
             renderAll();
             closeDataModal();
-            showToast('Đã khôi phục dữ liệu!', '🎉');
+
           } else {
             showToast('File JSON không hợp lệ', '⚠️');
           }
@@ -1346,90 +1399,90 @@
       const endpoint = document.getElementById('cloud-endpoint-input').value.trim() || DEFAULT_GIST_ENDPOINT;
       const apiKey = document.getElementById('cloud-apikey-input').value.trim();
       localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
-      document.getElementById('sync-status-badge').textContent = endpoint ? 'Auto-Sync ✓' : 'Not Configured';
+      setSaveStatus('Đã lưu cấu hình; chưa xác minh đồng bộ');
       showToast('Đã lưu cấu hình Cloud Sync', '☁️');
     }
 
-    async function pushToCloud(silent = false) {
-      const cfg = getStoredCloudConfig();
-      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint;
-      const apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
-      if (!endpoint) {
-        if (!silent) showToast('Chưa có Cloud Endpoint', '⚠️');
-        return;
-      }
-      if (!silent) saveCloudConfig();
+    async function fetchCloudState(endpoint, apiKey) {
+      const isGist = endpoint.includes('api.github.com/gists/');
+      const headers = {'Accept': isGist ? 'application/vnd.github+json' : 'application/json'};
+      if (apiKey) { headers['Authorization'] = `Bearer ${apiKey}`; if (!isGist) headers['apikey'] = apiKey; }
+      const response = await fetch(endpoint, {method:'GET', headers, cache:'no-store'});
+      if (!response.ok) throw new Error(`Không đọc được cloud (HTTP ${response.status})`);
+      const data = await response.json();
+      const parsed = isGist ? JSON.parse(data?.files?.['atomic_habits_state.json']?.content || 'null') : data;
+      const state = parsed?.state || parsed;
+      if (!state || !Array.isArray(state.habits) || !state.logs) throw new Error('Dữ liệu cloud không hợp lệ');
+      return state;
+    }
 
+    async function pushToCloud(silent = false, snapshot = appState) {
+      const cfg = getStoredCloudConfig();
+      const endpoint = document.getElementById('cloud-endpoint-input')?.value?.trim() || cfg.endpoint;
+      const apiKey = document.getElementById('cloud-apikey-input')?.value?.trim() || cfg.apiKey;
       try {
-        const isGist = endpoint.includes('api.github.com/gists/');
-        if (isGist && !apiKey) {
-          if (!silent) showToast('App trên Mac tự động đồng bộ qua server nền!', 'ℹ️');
+        if (isLocalServer()) {
+          if (!silent) await saveState();
           return;
         }
-        const headers = { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' };
-        if (apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
-          if (!isGist) headers['apikey'] = apiKey;
-        }
-
-        const payloadObj = { updatedAt: new Date().toISOString(), state: appState };
-        const body = isGist
-          ? JSON.stringify({
-              description: 'Atomic Habit & Streak Tracker — Cloud Sync State',
-              files: { 'atomic_habits_state.json': { content: JSON.stringify(payloadObj, null, 2) } }
-            })
-          : JSON.stringify(payloadObj);
-
-        const res = await fetch(endpoint, {
-          method: isGist ? 'PATCH' : 'PUT',
-          headers,
-          body
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const badge = document.getElementById('sync-status-badge');
-        if (badge) badge.textContent = 'Synced ✓';
-        if (!silent) showToast('Đã đẩy dữ liệu lên Cloud!', '☁️');
+        if (!endpoint || !apiKey) throw new Error('Chưa cấu hình cloud trên thiết bị này');
+        if (cloudReference === null) throw new Error('Chưa đối chiếu Gist; chưa đẩy dữ liệu');
+        const current = await fetchCloudState(endpoint, apiKey);
+        if (!sameState(current, cloudReference)) throw new Error('Dữ liệu Gist đã thay đổi; chưa đẩy dữ liệu');
+        const isGist = endpoint.includes('api.github.com/gists/');
+        const headers = {'Content-Type':'application/json','Accept':'application/vnd.github+json','Authorization':`Bearer ${apiKey}`};
+        if (!isGist) headers['apikey'] = apiKey;
+        const payload = {updatedAt:new Date().toISOString(), state:snapshot};
+        const body = isGist ? {description:'Atomic Habit & Streak Tracker — Cloud Sync State',files:{'atomic_habits_state.json':{content:JSON.stringify(payload,null,2)}}} : payload;
+        const response = await fetch(endpoint, {method:isGist?'PATCH':'PUT', headers, body:JSON.stringify(body)});
+        if (!response.ok) throw new Error(`Không đẩy được cloud (HTTP ${response.status})`);
+        const verified = await fetchCloudState(endpoint, apiKey);
+        if (!sameState(verified, snapshot)) throw new Error('Chưa xác minh được dữ liệu trên cloud');
+        cloudReference = verified;
+        if (!silent) { setSaveStatus('Đã lưu và xác minh trên Gist'); showToast('Đã xác minh trên cloud', '☁️'); }
       } catch (err) {
-        if (!silent) showToast(`Lỗi đồng bộ: ${err.message}`, '⚠️');
+        if (!silent) { setSaveStatus('Lỗi: ' + err.message); showToast('Không đồng bộ được — xem trạng thái', '⚠️'); }
+        if (silent) throw err;
+        return false;
       }
     }
 
     async function pullFromCloud(silent = false) {
       const cfg = getStoredCloudConfig();
-      const endpoint = (document.getElementById('cloud-endpoint-input')?.value?.trim()) || cfg.endpoint;
-      const apiKey = (document.getElementById('cloud-apikey-input')?.value?.trim()) || cfg.apiKey;
-      if (!endpoint) return;
-      if (!silent) saveCloudConfig();
-
+      const endpoint = document.getElementById('cloud-endpoint-input')?.value?.trim() || cfg.endpoint;
+      const apiKey = document.getElementById('cloud-apikey-input')?.value?.trim() || cfg.apiKey;
       try {
-        const isGist = endpoint.includes('api.github.com/gists/');
-        const headers = { 'Accept': isGist ? 'application/vnd.github+json' : 'application/json' };
-        if (apiKey) {
-          headers['Authorization'] = `Bearer ${apiKey}`;
-          if (!isGist) headers['apikey'] = apiKey;
+        if (isLocalServer()) {
+          const response = await fetch('/api/state', {cache:'no-store'});
+          if (!response.ok) throw new Error('Không đọc được dữ liệu trên máy');
+          const data = await response.json();
+          if (data.cloud_status === 'matches') { setSaveStatus('Dữ liệu máy và Gist khớp'); return true; }
+          setSaveStatus(data.cloud_status === 'conflict' ? 'Dữ liệu máy và Gist khác nhau; chưa ghi đè' : 'Không đọc được Gist; chưa xác minh đồng bộ');
+          return false;
         }
-        const res = await fetch(endpoint, { method: 'GET', headers, cache: 'no-store' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-
-        let remoteState = null;
-        if (isGist && data?.files?.['atomic_habits_state.json']?.content) {
-          const parsedGist = JSON.parse(data.files['atomic_habits_state.json'].content);
-          remoteState = parsedGist?.state || parsedGist;
-        } else {
-          remoteState = data?.state || data;
+        if (!endpoint) throw new Error('Chưa cấu hình cloud');
+        const remoteState = await fetchCloudState(endpoint, apiKey);
+        if (hadLocalState && !sameState(remoteState, appState)) {
+          cloudReference = null;
+          setSaveStatus('Dữ liệu trên thiết bị và Gist khác nhau; chưa ghi đè');
+          if (!silent) showToast('Dữ liệu khác nhau — chưa ghi đè', '⚠️');
+          return false;
         }
-
-        if (remoteState && Array.isArray(remoteState.habits) && remoteState.logs) {
+        cloudReference = remoteState;
+        if (!hadLocalState && !isLocalServer()) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteState));
           appState = remoteState;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+          hadLocalState = true;
           renderAll();
-          const badge = document.getElementById('sync-status-badge');
-          if (badge) badge.textContent = 'Pulled ✓';
-          if (!silent) showToast('Đã tải dữ liệu mới nhất từ Cloud!', '☁️');
         }
+        setSaveStatus('Dữ liệu thiết bị và Gist khớp');
+        if (!silent) showToast('Đã kiểm tra cloud', '☁️');
+        return true;
       } catch (err) {
-        if (!silent) showToast(`Lỗi tải Cloud: ${err.message}`, '⚠️');
+        cloudReference = null;
+        setSaveStatus('Lỗi đọc cloud: ' + err.message);
+        if (!silent) showToast('Không đọc được cloud — xem trạng thái', '⚠️');
+        return false;
       }
     }
 
@@ -1472,7 +1525,6 @@
         localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
         history.replaceState(null, '', location.pathname + location.search);
         showToast('Đã kết nối đồng bộ Cloud trên iPhone!', '⚡');
-        pullFromCloud(true);
       }
     }
 
@@ -1495,7 +1547,7 @@
       await loadState();
       renderAll();
       const cfg = getStoredCloudConfig();
-      if (cfg.endpoint) {
+      if (cfg.endpoint && !isLocalServer()) {
         pullFromCloud(true);
       }
       if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
