@@ -2029,8 +2029,16 @@
       return { endpoint: '', apiKey: '' };
     }
 
+    // Accepts the private link (…#g=<id>), a gist.github.com address, the API address or the bare id.
+    function normalizeGistEndpoint(value) {
+      const text = (value || '').trim();
+      const id = (/([0-9a-f]{32})\/?$/i.exec(text.replace(/[#?].*?g=/, '/')) || [])[1];
+      return id ? 'https://api.github.com/gists/' + id : text;
+    }
+
     function saveCloudConfig() {
-      const endpoint = document.getElementById('cloud-endpoint-input').value.trim();
+      const endpoint = normalizeGistEndpoint(document.getElementById('cloud-endpoint-input').value);
+      document.getElementById('cloud-endpoint-input').value = endpoint;
       const apiKey = document.getElementById('cloud-apikey-input').value.trim();
       localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ endpoint, apiKey }));
       setSaveStatus('Đã lưu cấu hình; chưa xác minh đồng bộ');
