@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import threading
+import tempfile
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -39,33 +40,42 @@ def ensure_dirs():
         )
 
 
-def push_gist_background(state_obj: dict):
-    """Push latest state to GitHub Secret Gist in background using gh CLI."""
-    def _worker():
-        try:
-            payload = {
-                "updatedAt": datetime.now().astimezone().isoformat(),
-                "state": state_obj,
-            }
-            body = {
-                "description": "Atomic Habit & Streak Tracker — Cloud Sync State",
-                "files": {
-                    "atomic_habits_state.json": {
-                        "content": json.dumps(payload, ensure_ascii=False, indent=2)
-                    }
-                },
-            }
-            subprocess.run(
-                [GH_BIN, "api", "--method", "PATCH", f"/gists/{DEFAULT_GIST_ID}", "--input", "-"],
-                input=json.dumps(body).encode("utf-8"),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
-        except Exception:
-            pass
+# Serialize local saves so two app requests cannot finish in reverse order.
+SAVE_LOCK = threading.Lock()
 
-    threading.Thread(target=_worker, daemon=True).start()
+
+def push_gist(state_obj: dict):
+    """Push synchronously and independently read back the Gist state."""
+    payload = {"updatedAt": datetime.now().astimezone().isoformat(), "state": state_obj}
+    body = {"description": "Atomic Habit & Streak Tracker — Cloud Sync State",
+            "files": {"atomic_habits_state.json": {"content": json.dumps(payload, ensure_ascii=False, indent=2)}}}
+    try:
+        result = subprocess.run(
+            [GH_BIN, "api", "--method", "PATCH", f"/gists/{DEFAULT_GIST_ID}", "--input", "-"],
+            input=json.dumps(body).encode("utf-8"), stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=10)
+        if result.returncode != 0:
+            return False, "Không đẩy được Gist"
+        verified = pull_gist_state()
+        if not verified or verified.get("state") != state_obj:
+            return False, "Chưa xác minh được dữ liệu trên Gist"
+        return True, ""
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "Không đẩy được Gist"
+
+
+def write_state_atomically(path, state):
+    """Replace only after a full write; do not expose partial JSON to readers."""
+    fd, tmp = tempfile.mkstemp(prefix=".habits-", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(state, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 
 
 def pull_gist_state():
@@ -174,27 +184,36 @@ class AtomicHabitHandler(SimpleHTTPRequestHandler):
         if not self.path.startswith("/api/state"):
             return self._send_json({"ok": False, "error": "Not found"}, status=404)
 
-        ensure_dirs()
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            body = self.rfile.read(length).decode("utf-8")
-            parsed = json.loads(body)
+            parsed = json.loads(self.rfile.read(length).decode("utf-8"))
             state = parsed.get("state", parsed)
-            if not isinstance(state, dict) or "habits" not in state or "logs" not in state:
-                return self._send_json({"ok": False, "error": "Invalid state payload"}, status=400)
+            if not isinstance(state, dict) or not isinstance(state.get("habits"), list) or not isinstance(state.get("logs"), dict):
+                return self._send_json({"ok": False, "local_saved": False, "error": "Invalid state payload"}, status=400)
+        except (ValueError, AttributeError, UnicodeDecodeError):
+            return self._send_json({"ok": False, "local_saved": False, "error": "Invalid JSON"}, status=400)
 
-            STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-
-            day_stamp = datetime.now().strftime("%Y-%m-%d")
-            daily_backup = BACKUP_DIR / f"habits_state_{day_stamp}.json"
-            daily_backup.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-
-            # Mirror asynchronously to GitHub Secret Gist
-            push_gist_background(state)
-
-            return self._send_json({"ok": True, "saved_to": str(STATE_FILE), "cloud_synced": True})
-        except Exception as exc:
-            return self._send_json({"ok": False, "error": str(exc)}, status=500)
+        with SAVE_LOCK:
+            try:
+                ensure_dirs()
+                previous = json.loads(STATE_FILE.read_text(encoding="utf-8")) if STATE_FILE.exists() else None
+                remote = pull_gist_state()
+                # Keep a backup of the state before replacing it.
+                if previous is not None:
+                    stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+                    write_state_atomically(BACKUP_DIR / f"habits_before_save_{stamp}.json", previous)
+                write_state_atomically(STATE_FILE, state)
+            except (OSError, ValueError):
+                return self._send_json({"ok": False, "local_saved": False, "cloud_synced": False,
+                                        "error": "Không lưu được dữ liệu trên máy"}, status=500)
+            if not remote or not isinstance(remote.get("state"), dict):
+                synced, error = False, "Đã lưu trên máy; không đọc được Gist, chưa đồng bộ"
+            elif previous is None or remote["state"] != previous:
+                synced, error = False, "Đã lưu trên máy; dữ liệu Gist khác, chưa đồng bộ"
+            else:
+                synced, error = push_gist(state)
+            return self._send_json({"ok": True, "local_saved": True, "cloud_synced": synced,
+                                    "cloud_error": error})
 
 
 if __name__ == "__main__":
